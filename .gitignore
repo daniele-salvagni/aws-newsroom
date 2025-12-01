@@ -1,0 +1,29 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Build Outputs
+backend/dist/
+frontend/dist/
+*.tsbuildinfo
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# IDE & Editors
+.vscode/
+.idea/
