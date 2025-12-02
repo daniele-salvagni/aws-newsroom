@@ -39,16 +39,6 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return notFound('Article not found');
     }
 
-    // Ensure user exists in users table
-    await query(
-      `
-      INSERT INTO users (user_id, email, username, created_at, updated_at)
-      VALUES ($1, $2, $3, NOW(), NOW())
-      ON CONFLICT (user_id) DO NOTHING
-    `,
-      [user.userId, user.email, user.username]
-    );
-
     // Create comment
     const commentId = randomUUID();
     await query(
@@ -77,6 +67,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       {
         message: 'Comment created',
         commentId,
+        username: user.username,
         hashtags,
       },
       201

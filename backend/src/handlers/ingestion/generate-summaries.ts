@@ -18,7 +18,7 @@ interface ArticleQueryResult {
 export const handler = async (event: SummaryInput = {}) => {
   console.log('Starting AI summary generation', event);
 
-  const batchSize = event.batchSize || 50;
+  const batchSize = event.batchSize || 100;
 
   try {
     // Find articles without AI summaries which have a description (aws-news)
@@ -52,7 +52,7 @@ export const handler = async (event: SummaryInput = {}) => {
         const summary = await generateSummary(article.title, article.description);
 
         await query(
-          `UPDATE news
+          `UPDATE news_articles
            SET ai_summary = $1, summary_generated_at = CURRENT_TIMESTAMP
            WHERE article_id = $2`,
           [summary, article.article_id]
