@@ -1,0 +1,522 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: aws-newsroom - AWS News Aggregator
+
+Parameters:
+  AllowedEmailDomain:
+    Type: String
+    Default: example.com
+    Description: Email domain allowed for user signups (e.g., yourcompany.com)
+
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        NODE_ENV: production
+    Architectures:
+      - arm64
+
+Resources:
+  # AUTH -----------------------------------------------------------------------
+
+  PreSignupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/auth/pre-signup.handler
+      Environment:
+        Variables:
+          ALLOWED_EMAIL_DOMAIN: !Ref AllowedEmailDomain
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  PreSignupInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PreSignupFunction
+      Principal: cognito-idp.amazonaws.com
+      Action: lambda:InvokeFunction
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-user-pool"
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: false
+          AttributeDataType: String
+        - Name: name
+          Required: true
+          Mutable: true
+          AttributeDataType: String
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignupFunction.Arn
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${AWS::StackName}-user-pool-client"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+
+  # DATABASE -------------------------------------------------------------------
+
+  AuroraDSQLCluster:
+    Type: AWS::DSQL::Cluster
+    Properties:
+      DeletionProtectionEnabled: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-dsql-cluster"
+
+  # API GATEWAY ----------------------------------------------------------------
+
+  NewsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      StageName: live
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+      Auth:
+        # DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+
+  # LAMBDA (API Articles) ------------------------------------------------------
+
+  ListArticlesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/articles/list.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        GetArticles:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /articles
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  GetArticleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/articles/get.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        GetArticle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /articles/{articleId}
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  StarArticleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/articles/star.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        StarArticle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /articles/{articleId}/star
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UnstarArticle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /articles/{articleId}/star
+            Method: DELETE
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  # LAMBDA (API Comments) ------------------------------------------------------
+
+  ListCommentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/comments/list.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        GetComments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /articles/{articleId}/comments
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  BatchCommentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/comments/batch.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        BatchComments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /comments/batch
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  CreateCommentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/comments/create.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        CreateComment:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /articles/{articleId}/comments
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  DeleteCommentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/comments/delete.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        DeleteComment:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /comments/{commentId}
+            Method: DELETE
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  # LAMBDA (API User) ----------------------------------------------------------
+
+  GetUserStarredFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/user/starred.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        GetStarred:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /user/starred
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  # LAMBDA (API Hashtags) ------------------------------------------------------
+
+  GetPopularHashtagsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/hashtags/popular.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        GetPopularHashtags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /hashtags/popular
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  # LAMBDA (API Other) ---------------------------------------------------------
+
+  GetUpcomingEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/events/upcoming.handler
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Events:
+        GetUpcomingEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsApi
+            Path: /events/upcoming
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  # INGESTION WORKFLOW ---------------------------------------------------------
+
+  IngestionStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-ingestion-workflow"
+      DefinitionUri: statemachine/ingestion-workflow.asl.json
+      DefinitionSubstitutions:
+        IngestNewsFunction: !GetAtt IngestNewsFunction.Arn
+        IngestBlogFunction: !GetAtt IngestBlogFunction.Arn
+        GenerateSummariesFunction: !GetAtt GenerateSummariesFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref IngestNewsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref IngestBlogFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GenerateSummariesFunction
+      Events:
+        DailyIngestion:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 */6 * * ? *)
+            Description: Run ingestion workflow every 6 hours
+            Input: |
+              {
+                "daysBack": 1
+              }
+
+  EventBridgeStepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeStepFunctions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !GetAtt IngestionStateMachine.Arn
+
+  # # EventBridge Rule for Manual/Historical Ingestion (disabled by default)
+  # HistoricalIngestionRule:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Name: !Sub "${AWS::StackName}-historical-ingestion"
+  #     Description: Trigger for historical data ingestion (disabled by default)
+  #     State: DISABLED
+  #     ScheduleExpression: rate(1 day)
+  #     Targets:
+  #       - Id: HistoricalIngestionTarget
+  #         Arn: !GetAtt IngestionStateMachine.Arn
+  #         RoleArn: !GetAtt EventBridgeStepFunctionsRole.Arn
+  #         Input: |
+  #           {
+  #             "daysBack": 30
+  #           }
+
+  IngestNewsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/ingestion/ingest-news.handler
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  IngestBlogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/ingestion/ingest-blog.handler
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+
+  GenerateSummariesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: dist/handlers/ingestion/generate-summaries.handler
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dsql:DbConnectAdmin
+              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0"
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${NewsApi}.execute-api.${AWS::Region}.amazonaws.com/live"
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
+
+  AuroraEndpoint:
+    Description: Aurora DSQL Endpoint
+    Value: !GetAtt AuroraDSQLCluster.Endpoint
+
+  AuroraDSQLClusterArn:
+    Description: Aurora DSQL Cluster ARN
+    Value: !GetAtt AuroraDSQLCluster.ResourceArn
