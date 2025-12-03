@@ -9,6 +9,7 @@ interface IngestionInput {
 }
 
 interface BlogArticle {
+  awsSourceId: string;
   title: string;
   url: string;
   description?: string;
@@ -70,8 +71,8 @@ function stripHtml(html: string | null | undefined): string | null {
   return html.replace(/<[^>]*>/g, '').trim();
 }
 
-function generateArticleId(url: string): string {
-  return crypto.createHash('sha256').update(url).digest('hex').substring(0, 32);
+function generateArticleId(awsSourceId: string): string {
+  return crypto.createHash('sha256').update(awsSourceId).digest('hex').substring(0, 32);
 }
 
 async function fetchAwsBlog(startDate: Date, endDate: Date): Promise<BlogArticle[]> {
@@ -132,6 +133,7 @@ async function fetchAwsBlog(startDate: Date, endDate: Date): Promise<BlogArticle
         const excerpt = stripHtml(item.additionalFields.postExcerpt);
 
         articles.push({
+          awsSourceId: item.id,
           title: item.additionalFields.title || '',
           url,
           description: excerpt || undefined,
@@ -169,7 +171,7 @@ async function storeArticles(articles: BlogArticle[], source: string) {
 
   for (const article of articles) {
     try {
-      const articleId = generateArticleId(article.url);
+      const articleId = generateArticleId(article.awsSourceId);
 
       // Generate content hash for change detection
       const contentHash = article.content
@@ -189,10 +191,11 @@ async function storeArticles(articles: BlogArticle[], source: string) {
       // Insert new article (blog excerpt as description, no content)
       await query(
         `INSERT INTO news_articles (
-          article_id, source, title, url, description, published_at, blog_category
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          article_id, aws_source_id, source, title, url, description, published_at, blog_category
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           articleId,
+          article.awsSourceId,
           source,
           article.title,
           article.url,

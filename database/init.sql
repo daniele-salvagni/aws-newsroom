@@ -18,6 +18,7 @@ CREATE INDEX ASYNC IF NOT EXISTS idx_users_created_at ON users(created_at);
 -- News articles table
 CREATE TABLE IF NOT EXISTS news_articles (
     article_id VARCHAR(64) PRIMARY KEY,
+    aws_source_id VARCHAR(255),
     source VARCHAR(50) NOT NULL,
     title VARCHAR(500) NOT NULL,
     url VARCHAR(1000) NOT NULL UNIQUE,
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
 CREATE INDEX ASYNC IF NOT EXISTS idx_articles_published ON news_articles(published_at);
 CREATE INDEX ASYNC IF NOT EXISTS idx_articles_source ON news_articles(source);
 CREATE INDEX ASYNC IF NOT EXISTS idx_articles_ingested ON news_articles(ingested_at);
+CREATE INDEX ASYNC IF NOT EXISTS idx_articles_aws_source_id ON news_articles(aws_source_id);
 
 -- User starred articles table
 CREATE TABLE IF NOT EXISTS user_starred_articles (

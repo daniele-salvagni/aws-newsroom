@@ -9,6 +9,7 @@ interface IngestionInput {
 }
 
 interface ArticleData {
+  awsSourceId: string;
   title: string;
   url: string;
   description?: string;
@@ -69,8 +70,8 @@ function stripHtml(html: string | null | undefined): string | null {
   return html.replace(/<[^>]*>/g, '').trim();
 }
 
-function generateArticleId(url: string): string {
-  return crypto.createHash('sha256').update(url).digest('hex').substring(0, 32);
+function generateArticleId(awsSourceId: string): string {
+  return crypto.createHash('sha256').update(awsSourceId).digest('hex').substring(0, 32);
 }
 
 async function fetchAwsNews(startDate: Date, endDate: Date): Promise<ArticleData[]> {
@@ -126,6 +127,7 @@ async function fetchAwsNews(startDate: Date, endDate: Date): Promise<ArticleData
         if (publishedAt <= endDate) {
           foundItemsInRange = true;
           articles.push({
+            awsSourceId: item.id,
             title: item.additionalFields.headline || '',
             url,
             description: stripHtml(item.additionalFields.postBody) || undefined,
@@ -164,7 +166,7 @@ async function storeArticles(articles: ArticleData[], source: string) {
 
   for (const article of articles) {
     try {
-      const articleId = generateArticleId(article.url);
+      const articleId = generateArticleId(article.awsSourceId);
 
       // Generate content hash for change detection
       const contentHash = article.content
@@ -184,10 +186,11 @@ async function storeArticles(articles: ArticleData[], source: string) {
       // Insert new article (full text in description for AI summary generation)
       await query(
         `INSERT INTO news_articles (
-          article_id, source, title, url, description, published_at
-        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          article_id, aws_source_id, source, title, url, description, published_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           articleId,
+          article.awsSourceId,
           source,
           article.title,
           article.url,
