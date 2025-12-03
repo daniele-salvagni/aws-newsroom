@@ -1,0 +1,19 @@
+{
+  "name": "aws-newsroom",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "be:build": "npm run build --workspace=backend",
+    "be:test": "npm run test --workspace=backend",
+    "fe:build": "npm run build --workspace=frontend",
+    "fe:dev": "npm run dev --workspace=frontend",
+    "build": "npm run be:build && npm run fe:build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
