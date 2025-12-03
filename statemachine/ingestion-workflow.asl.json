@@ -1,0 +1,97 @@
+{
+  "Comment": "AWS News and Blog Ingestion Workflow with AI Summary Generation",
+  "QueryLanguage": "JSONata",
+  "StartAt": "ParallelIngestion",
+  "States": {
+    "ParallelIngestion": {
+      "Type": "Parallel",
+      "Comment": "Ingest news and blog articles in parallel",
+      "Branches": [
+        {
+          "StartAt": "IngestNews",
+          "States": {
+            "IngestNews": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Arguments": {
+                "FunctionName": "${IngestNewsFunction}",
+                "Payload": "{% $states.input %}"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "IngestBlog",
+          "States": {
+            "IngestBlog": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Arguments": {
+                "FunctionName": "${IngestBlogFunction}",
+                "Payload": "{% $states.input %}"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        }
+      ],
+      "Assign": {
+        "ingestionResults": "{% $states.result %}"
+      },
+      "Next": "GenerateSummaries"
+    },
+    "GenerateSummaries": {
+      "Type": "Task",
+      "Comment": "Generate AI summaries for articles without them",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${GenerateSummariesFunction}",
+        "Payload": {
+          "batchSize": 100
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Output": {
+        "ingestion": "{% $ingestionResults %}",
+        "summaries": "{% $states.result.Payload %}"
+      },
+      "End": true
+    }
+  }
+}
