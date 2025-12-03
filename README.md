@@ -62,13 +62,15 @@ Amazon EventBridge. (no diagrams yet)
    psql -h $AURORA_ENDPOINT -U admin -d postgres -f database/init.sql
    ```
 
-4. Data is automatically ingested every hour. You can trigger ingestion manually
-   by invoking the Step Functions state machine from the AWS Console. You can
-   use the following payload to ingest the past 2 days of data:
+4. Data is automatically ingested every hour. This feature comes disabled by
+   default, but can be activated by enabling the PeriodicIngestionRule through
+   the AWS Console or SAM Template. You can trigger ingestion manually by
+   invoking the Step Functions state machine from the AWS Console. You can use
+   the following payload to ingest the past N days of data:
 
    ```json
    {
-     "pastDays": 2
+     "pastDays": N
    }
    ```
 

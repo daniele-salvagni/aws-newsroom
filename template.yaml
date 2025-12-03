@@ -428,22 +428,22 @@ Resources:
                   - states:StartExecution
                 Resource: !GetAtt IngestionStateMachine.Arn
 
-  # # EventBridge Rule for Manual/Historical Ingestion (disabled by default)
-  # HistoricalIngestionRule:
-  #   Type: AWS::Events::Rule
-  #   Properties:
-  #     Name: !Sub "${AWS::StackName}-historical-ingestion"
-  #     Description: Trigger for historical data ingestion (disabled by default)
-  #     State: DISABLED
-  #     ScheduleExpression: rate(1 day)
-  #     Targets:
-  #       - Id: HistoricalIngestionTarget
-  #         Arn: !GetAtt IngestionStateMachine.Arn
-  #         RoleArn: !GetAtt EventBridgeStepFunctionsRole.Arn
-  #         Input: |
-  #           {
-  #             "daysBack": 30
-  #           }
+  # Rule for periodic ingestion (disabled by default)
+  PeriodicIngestionRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-periodic-ingestion"
+      Description: Trigger for periodic data ingestion (disabled by default)
+      State: DISABLED
+      ScheduleExpression: rate(1 hour)
+      Targets:
+        - Id: IngestionStateMachineTarget
+          Arn: !GetAtt IngestionStateMachine.Arn
+          RoleArn: !GetAtt EventBridgeStepFunctionsRole.Arn
+          Input: |
+            {
+              "daysBack": 2
+            }
 
   IngestNewsFunction:
     Type: AWS::Serverless::Function
