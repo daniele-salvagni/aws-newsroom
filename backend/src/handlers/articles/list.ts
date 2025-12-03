@@ -65,7 +65,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       queryParams.push(hashtag.toLowerCase());
     }
 
-    sql += ` GROUP BY a.article_id ORDER BY a.published_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    sql += ` GROUP BY a.article_id ORDER BY a.published_at DESC, a.article_id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     queryParams.push(limit, offset);
 
     const articles = await query<ArticleQueryResult>(sql, queryParams);

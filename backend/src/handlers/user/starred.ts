@@ -35,7 +35,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       LEFT JOIN user_starred_articles s ON a.article_id = s.article_id
       WHERE sa.user_id = $1
       GROUP BY sa.star_id, sa.starred_at, a.article_id, a.title, a.url, a.description, a.ai_summary, a.published_at, a.source, a.blog_category
-      ORDER BY a.published_at DESC
+      ORDER BY a.published_at DESC, a.article_id DESC
     `,
       [user.userId]
     );
