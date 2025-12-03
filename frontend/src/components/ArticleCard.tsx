@@ -221,7 +221,7 @@ export default function ArticleCard({
               className="hover:text-black"
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              Read
+              Read ↗
             </a>
             <span className="text-gray-300">·</span>
             <a

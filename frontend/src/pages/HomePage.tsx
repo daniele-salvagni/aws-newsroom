@@ -22,7 +22,7 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState({
-    source: '',
+    source: 'aws-news',
     hashtag: '',
     // excludeRegional: false, // Temporarily disabled
   });
@@ -47,7 +47,7 @@ export default function HomePage() {
   // Initialize and sync filters from URL params
   useEffect(() => {
     setFilters({
-      source: searchParams.get('source') || '',
+      source: searchParams.get('source') || 'aws-news',
       hashtag: searchParams.get('hashtag') || '',
     });
     if (!isInitialized) {

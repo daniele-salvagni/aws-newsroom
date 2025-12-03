@@ -70,7 +70,7 @@ Amazon EventBridge. (no diagrams yet)
 
    ```json
    {
-     "pastDays": N
+     "daysBack": N
    }
    ```
 
