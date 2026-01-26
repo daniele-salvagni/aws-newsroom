@@ -13,6 +13,7 @@ Globals:
     Runtime: nodejs24.x
     Timeout: 30
     MemorySize: 512
+    Tracing: Active
     Environment:
       Variables:
         NODE_ENV: production
@@ -100,6 +101,7 @@ Resources:
     Properties:
       Name: !Sub "${AWS::StackName}-api"
       StageName: live
+      TracingEnabled: true
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
@@ -390,6 +392,8 @@ Resources:
         IngestNewsFunction: !GetAtt IngestNewsFunction.Arn
         IngestBlogFunction: !GetAtt IngestBlogFunction.Arn
         GenerateSummariesFunction: !GetAtt GenerateSummariesFunction.Arn
+      Tracing:
+        Enabled: true
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref IngestNewsFunction
