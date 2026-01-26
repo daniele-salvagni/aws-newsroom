@@ -133,7 +133,10 @@ async function fetchWhatsNewWithTagFormat(params: {
   const tagId = TAG_FORMATS[tagFormat](year);
   url.searchParams.set('tags.id', tagId);
 
-  const response = await fetch(url.toString());
+  const requestUrl = url.toString();
+  console.log(`Fetching What's New API: ${requestUrl}`);
+
+  const response = await fetch(requestUrl);
   if (!response.ok) {
     throw new Error(`What's New API request failed: ${response.status}`);
   }
@@ -214,7 +217,10 @@ export async function fetchPageOfBlogs(params: {
       url.searchParams.set('tags.id', categoryTag);
     }
 
-    const response = await fetch(url.toString());
+    const requestUrl = url.toString();
+    console.log(`Fetching Blog API: ${requestUrl}`);
+
+    const response = await fetch(requestUrl);
     if (!response.ok) {
       throw new Error(`Blog API request failed: ${response.status}`);
     }
