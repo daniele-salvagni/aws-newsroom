@@ -28,6 +28,7 @@ export interface Article {
   title: string;
   url: string;
   description: string;
+  rawHtml?: string | null;
   aiSummary?: string | null; // Null if not generated yet
   publishedAt: string;
   source: string;
@@ -35,6 +36,10 @@ export interface Article {
   starCount: number;
   isStarred?: boolean;
   // hashtags?: string[]; // DISABLED
+  blogPosts?: Array<{
+    title: string;
+    url: string;
+  }>;
   commentPreviews?: Array<{
     commentId: string;
     displayName: string;
@@ -68,16 +73,12 @@ export interface Comment {
 export async function listArticles(params?: {
   page?: number;
   limit?: number;
-  source?: string;
   hashtag?: string;
-  excludeRegional?: boolean;
 }): Promise<{ articles: Article[]; page: number; limit: number; hasMore: boolean }> {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.set('page', params.page.toString());
   if (params?.limit) queryParams.set('limit', params.limit.toString());
-  if (params?.source) queryParams.set('source', params.source);
   if (params?.hashtag) queryParams.set('hashtag', params.hashtag);
-  if (params?.excludeRegional) queryParams.set('excludeRegional', 'true');
 
   const response = await fetch(`${API_ENDPOINT}/articles?${queryParams}`, {
     headers: await getAuthHeaders(true), // Requires auth

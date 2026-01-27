@@ -127,9 +127,6 @@ export default function ArticleCard({
     });
   };
 
-  const isBlog = article.source === 'aws-blog';
-  const sourceLabel = isBlog ? 'Blog' : 'News';
-
   return (
     <div
       className={`py-3 border-b border-gray-100 hover:bg-gray-50 transition-all duration-200 relative pl-3 ${
@@ -179,18 +176,23 @@ export default function ArticleCard({
             </h2>
           </div>
 
-          {showPreview && (article.aiSummary || article.description) && (
+          {showPreview && (article.aiSummary || article.rawHtml || article.description) && (
             <div
               className="text-sm text-gray-600 mb-3 leading-relaxed cursor-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {useAiSummary && article.aiSummary && (
-                <span className="mr-1.5 text-xs font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
+                <span className="mr-1.5 text-xs font-semibold bg-linear-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
                   AI Summary:
                 </span>
               )}
               {useAiSummary && article.aiSummary ? (
                 <StreamingText text={article.aiSummary} speed={10} />
+              ) : article.rawHtml ? (
+                <div 
+                  className="[&_a]:text-violet-600 [&_a]:underline [&_a:hover]:text-violet-800"
+                  dangerouslySetInnerHTML={{ __html: article.rawHtml }} 
+                />
               ) : (
                 article.description
               )}
@@ -199,8 +201,6 @@ export default function ArticleCard({
 
           <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
             <span>{formatDate(article.publishedAt)}</span>
-            <span className="text-gray-300">·</span>
-            <span className={isBlog ? 'text-emerald-600' : 'text-lime-600'}>{sourceLabel}</span>
             <span className="text-gray-300">·</span>
             <Link
               to={`/article/${article.articleId}`}
@@ -221,7 +221,7 @@ export default function ArticleCard({
               className="hover:text-black"
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              Read ↗
+              Read↗
             </a>
             <span className="text-gray-300">·</span>
             <a
@@ -240,6 +240,26 @@ export default function ArticleCard({
               Comment
             </a>
           </div>
+
+          {article.blogPosts && article.blogPosts.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {article.blogPosts.map((blogPost, idx) => (
+                <a
+                  key={idx}
+                  href={blogPost.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 border border-gray-200 rounded hover:border-gray-400 transition-all group text-xs"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  title={blogPost.title}
+                >
+                  <span>📝</span>
+                  <span className="text-gray-600 group-hover:text-gray-900 truncate max-w-[450px]">{blogPost.title}</span>
+                  <span className="text-gray-400 group-hover:text-gray-600">↗</span>
+                </a>
+              ))}
+            </div>
+          )}
 
           {showCommentBox && (
             <form

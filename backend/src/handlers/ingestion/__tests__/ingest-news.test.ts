@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { extractBlogUrls, stripHtml, fetchBlogTitle } from '../ingest-news.js';
 
 // Mock dependencies before importing handler
 vi.mock('../../../lib/db.js', () => ({
@@ -14,6 +15,92 @@ import { fetchNews } from '../../../lib/aws-news/index.js';
 
 const mockQuery = vi.mocked(query);
 const mockFetchNews = vi.mocked(fetchNews);
+
+describe('extractBlogUrls', () => {
+  it('extracts AWS blog URLs from HTML', () => {
+    const html = `<p>To learn more, visit our <a href="https://aws.amazon.com/blogs/big-data/safely-remove-kafka-brokers/" target="_blank">launch blog</a>.</p>`;
+
+    const urls = extractBlogUrls(html);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toBe('https://aws.amazon.com/blogs/big-data/safely-remove-kafka-brokers/');
+  });
+
+  it('extracts multiple blog URLs from HTML', () => {
+    const html = `
+      <p>Visit the <a href="https://aws.amazon.com/blogs/aws/new-feature/">blog post</a> and 
+      the <a href="https://aws.amazon.com/blogs/compute/another-post/">compute blog</a>.</p>
+    `;
+
+    const urls = extractBlogUrls(html);
+
+    expect(urls).toHaveLength(2);
+  });
+
+  it('ignores non-blog AWS links', () => {
+    const html = `<a href="https://docs.aws.amazon.com/guide.html">docs</a>
+                  <a href="https://console.aws.amazon.com/">console</a>`;
+
+    const urls = extractBlogUrls(html);
+
+    expect(urls).toHaveLength(0);
+  });
+
+  it('ignores aws.amazon.com links without /blogs/ path', () => {
+    const html = `
+      <a href="https://aws.amazon.com/msk/">MSK product page</a>
+      <a href="https://aws.amazon.com/about-aws/whats-new/2024/">whats new</a>
+      <a href="https://aws.amazon.com/solutions/case-studies/">case studies</a>
+    `;
+
+    const urls = extractBlogUrls(html);
+
+    expect(urls).toHaveLength(0);
+  });
+
+  it('deduplicates URLs', () => {
+    const html = `
+      <a href="https://aws.amazon.com/blogs/aws/post/">first</a>
+      <a href="https://aws.amazon.com/blogs/aws/post/">second</a>
+    `;
+
+    const urls = extractBlogUrls(html);
+
+    expect(urls).toHaveLength(1);
+  });
+
+  it('returns empty array for null/undefined input', () => {
+    expect(extractBlogUrls(null)).toEqual([]);
+    expect(extractBlogUrls(undefined)).toEqual([]);
+    expect(extractBlogUrls('')).toEqual([]);
+  });
+
+  it('handles real AWS announcement HTML', () => {
+    const html = `<p>To learn more, visit our <a href="https://aws.amazon.com/blogs/big-data/safely-remove-kafka-brokers-from-amazon-msk-provisioned-clusters/" target="_blank" rel="noopener">launch blog</a> and the <a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-remove-broker.html" target="_blank" rel="noopener">Amazon MSK Developer Guide</a>.</p>`;
+
+    const urls = extractBlogUrls(html);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toBe(
+      'https://aws.amazon.com/blogs/big-data/safely-remove-kafka-brokers-from-amazon-msk-provisioned-clusters/'
+    );
+  });
+});
+
+describe('stripHtml', () => {
+  it('removes HTML tags from string', () => {
+    expect(stripHtml('<p>Hello <strong>world</strong></p>')).toBe('Hello world');
+  });
+
+  it('returns undefined for null/undefined input', () => {
+    expect(stripHtml(null)).toBeUndefined();
+    expect(stripHtml(undefined)).toBeUndefined();
+  });
+
+  it('trims whitespace', () => {
+    expect(stripHtml('  <p>text</p>  ')).toBe('text');
+  });
+});
 
 describe('ingest-news handler', () => {
   beforeEach(() => {

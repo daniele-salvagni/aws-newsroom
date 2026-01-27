@@ -13,7 +13,11 @@ import ArticleCard from '../components/ArticleCard';
 
 // todo: refactor this thing
 
-export default function HomePage() {
+interface HomePageProps {
+  useAiSummaries: boolean;
+}
+
+export default function HomePage({ useAiSummaries }: HomePageProps) {
   const { user } = useAuthenticator((context) => [context.user]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -22,9 +26,7 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState({
-    source: 'aws-news',
     hashtag: '',
-    // excludeRegional: false, // Temporarily disabled
   });
   const [lastReadTimestamp, setLastReadTimestamp] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
@@ -39,15 +41,10 @@ export default function HomePage() {
     endTime: string;
   } | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [useAiSummaries, setUseAiSummaries] = useState(() => {
-    const stored = localStorage.getItem('useAiSummaries');
-    return stored ? JSON.parse(stored) : true;
-  });
 
   // Initialize and sync filters from URL params
   useEffect(() => {
     setFilters({
-      source: searchParams.get('source') || 'aws-news',
       hashtag: searchParams.get('hashtag') || '',
     });
     if (!isInitialized) {
@@ -78,13 +75,11 @@ export default function HomePage() {
   useEffect(() => {
     if (!isInitialized) return; // Don't sync until initialized
 
-    const currentSource = searchParams.get('source') || '';
     const currentHashtag = searchParams.get('hashtag') || '';
 
     // Only update URL if filters actually changed
-    if (filters.source !== currentSource || filters.hashtag !== currentHashtag) {
+    if (filters.hashtag !== currentHashtag) {
       const params = new URLSearchParams();
-      if (filters.source) params.set('source', filters.source);
       if (filters.hashtag) params.set('hashtag', filters.hashtag);
       setSearchParams(params);
     }
@@ -121,9 +116,7 @@ export default function HomePage() {
       const data = await listArticles({
         page,
         limit: 100,
-        source: filters.source || undefined,
         hashtag: filters.hashtag || undefined,
-        // excludeRegional: filters.excludeRegional, // Temporarily disabled
       });
 
       let articlesWithComments = data.articles;
@@ -204,10 +197,10 @@ export default function HomePage() {
     <div>
       <div className="mb-4 pb-3 border-b border-gray-200">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-lg font-semibold">
+          <h1 className="text-lg font-semibold flex items-center gap-3">
             Latest AWS News
             {filters.hashtag && (
-              <span className="ml-2 text-sm font-normal text-violet-600">
+              <span className="text-sm font-normal text-violet-600">
                 #{filters.hashtag}
                 <a
                   href="#"
@@ -222,59 +215,20 @@ export default function HomePage() {
               </span>
             )}
           </h1>
-          <div className="flex items-center gap-3 text-sm">
-            {/* <button
-              onClick={() => {
-                // Use the most recent article's published date, not current date
-                // This prevents marking articles as read that haven't been ingested yet
-                if (articles.length > 0) {
-                  const mostRecentDate = articles[0].publishedAt;
-                  localStorage.setItem('lastReadTimestamp', mostRecentDate);
-                  setLastReadTimestamp(mostRecentDate);
-                }
-              }}
-              className="text-xs text-gray-600 hover:text-black underline cursor-pointer"
+          {import.meta.env.VITE_BRANDING_LOGO_URL && (
+            <a 
+              href={import.meta.env.VITE_BRANDING_LOGO_LINK || '#'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:opacity-70 transition-opacity"
             >
-              mark all as read
-            </button> */}
-            <label className="flex items-center gap-2 cursor-pointer text-xs">
-              <input
-                type="checkbox"
-                checked={useAiSummaries}
-                onChange={(e) => {
-                  const newValue = e.target.checked;
-                  setUseAiSummaries(newValue);
-                  localStorage.setItem('useAiSummaries', JSON.stringify(newValue));
-                }}
-                className="w-3.5 h-3.5 cursor-pointer"
+              <img 
+                src={import.meta.env.VITE_BRANDING_LOGO_URL} 
+                alt="Branding" 
+                className="h-5"
               />
-              <span className="font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
-                AI
-              </span>
-            </label>
-
-            <select
-              value={filters.source}
-              onChange={(e) => handleFilterChange({ source: e.target.value })}
-              className="px-2 py-1 border border-gray-300 text-sm focus:outline-none focus:border-black"
-            >
-              <option value="">All Sources</option>
-              <option value="aws-news">AWS News</option>
-              <option value="aws-blog">AWS Blog</option>
-            </select>
-
-            {/* Temporarily disabled - regional filtering removed from backend
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filters.excludeRegional}
-                onChange={(e) => handleFilterChange({ excludeRegional: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-gray-600">Hide Regional</span>
-            </label>
-            */}
-          </div>
+            </a>
+          )}
         </div>
       </div>
 
@@ -315,7 +269,7 @@ export default function HomePage() {
           });
 
           return (
-            <div className="mb-4 bg-gradient-to-r from-fuchsia-50 to-violet-50 px-3 py-2 rounded border-l-2 border-fuchsia-400">
+            <div className="mb-4 bg-linear-to-r from-fuchsia-50 to-violet-50 px-3 py-2 rounded border-l-2 border-fuchsia-400">
               <div className="flex items-baseline gap-2 text-xs">
                 <span className="text-fuchsia-600 font-medium">{upcomingEvent.category}</span>
                 <span className="text-gray-400">·</span>

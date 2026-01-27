@@ -196,17 +196,35 @@ export default function ArticlePage() {
           </a>
         </div>
 
-        {(article.aiSummary || article.description) && (
+        {(article.rawHtml || article.description) && (
           <div className="text-sm text-gray-600 mb-3 leading-relaxed">
-            {article.aiSummary && (
-              <span className="mr-1.5 text-xs font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
-                AI:
-              </span>
+            {article.rawHtml ? (
+              <div 
+                className="[&_a]:text-violet-600 [&_a]:underline [&_a:hover]:text-violet-800"
+                dangerouslySetInnerHTML={{ __html: article.rawHtml }} 
+              />
+            ) : (
+              article.description
             )}
-            {article.aiSummary ||
-              (article.description && article.description.length > 750
-                ? article.description.substring(0, 750) + '...'
-                : article.description)}
+          </div>
+        )}
+
+        {article.blogPosts && article.blogPosts.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {article.blogPosts.map((blogPost, idx) => (
+              <a
+                key={idx}
+                href={blogPost.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 border border-gray-200 rounded hover:border-gray-400 transition-all group text-xs"
+                title={blogPost.title}
+              >
+                <span>📝</span>
+                <span className="text-gray-600 group-hover:text-gray-900 truncate max-w-[450px]">{blogPost.title}</span>
+                <span className="text-gray-400 group-hover:text-gray-600">↗</span>
+              </a>
+            ))}
           </div>
         )}
 
@@ -217,10 +235,6 @@ export default function ArticlePage() {
               day: 'numeric',
               year: 'numeric',
             })}
-          </span>
-          <span className="text-gray-300">·</span>
-          <span className={article.source === 'aws-blog' ? 'text-emerald-600' : 'text-lime-600'}>
-            {article.source === 'aws-blog' ? 'Blog' : 'News'}
           </span>
           {article.author && (
             <>

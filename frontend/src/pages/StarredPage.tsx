@@ -5,16 +5,16 @@ import { getStarredArticles, batchComments } from '../lib/api';
 import { Link, useNavigate } from 'react-router-dom';
 import ArticleCard from '../components/ArticleCard';
 
-export default function StarredPage() {
+interface StarredPageProps {
+  useAiSummaries: boolean;
+}
+
+export default function StarredPage({ useAiSummaries }: StarredPageProps) {
   const { user } = useAuthenticator((context) => [context.user]);
   const navigate = useNavigate();
   const [savedArticles, setSavedArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
-  const [useAiSummaries, setUseAiSummaries] = useState(() => {
-    const stored = localStorage.getItem('useAiSummaries');
-    return stored ? JSON.parse(stored) : true;
-  });
 
   useEffect(() => {
     if (user) {
@@ -78,24 +78,7 @@ export default function StarredPage() {
   return (
     <div>
       <div className="mb-4 pb-3 border-b border-gray-200">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-lg font-semibold">Starred Articles ({savedArticles.length})</h1>
-          <label className="flex items-center gap-2 cursor-pointer text-xs">
-            <input
-              type="checkbox"
-              checked={useAiSummaries}
-              onChange={(e) => {
-                const newValue = e.target.checked;
-                setUseAiSummaries(newValue);
-                localStorage.setItem('useAiSummaries', JSON.stringify(newValue));
-              }}
-              className="w-3.5 h-3.5 cursor-pointer"
-            />
-            <span className="font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
-              AI
-            </span>
-          </label>
-        </div>
+        <h1 className="text-lg font-semibold">Starred Articles ({savedArticles.length})</h1>
       </div>
 
       {savedArticles.length === 0 ? (

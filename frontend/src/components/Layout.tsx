@@ -6,9 +6,11 @@ import CustomAuthenticator from './CustomAuthenticator';
 
 interface LayoutProps {
   children: React.ReactNode;
+  useAiSummaries: boolean;
+  setUseAiSummaries: (value: boolean) => void;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children, useAiSummaries, setUseAiSummaries }: LayoutProps) {
   const { user, signOut } = useAuthenticator((context) => [context.user]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [displayName, setDisplayName] = useState('User');
@@ -42,14 +44,14 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      <nav className="border-b border-gray-200">
+      <nav className="border-b border-gray-200 sticky top-0 bg-white z-40">
         <div className="max-w-5xl mx-auto px-4 sm:px-8">
           <div className="flex justify-between items-center h-14">
             <div className="flex items-baseline gap-3 sm:gap-6">
               <a
                 href="/"
                 onClick={handleHomeClick}
-                className="font-bold text-base tracking-tight bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 bg-clip-text text-transparent hover:brightness-125 transition-all"
+                className="font-bold text-base tracking-tight bg-linear-to-r from-violet-600 via-fuchsia-600 to-violet-600 bg-clip-text text-transparent hover:brightness-125 transition-all"
                 style={{
                   backgroundSize: '200% auto',
                   animation: 'gradient 3s ease infinite',
@@ -67,6 +69,21 @@ export default function Layout({ children }: LayoutProps) {
               )}
             </div>
             <div className="flex items-center gap-2 sm:gap-3 text-sm">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                <input
+                  type="checkbox"
+                  checked={useAiSummaries}
+                  onChange={(e) => {
+                    const newValue = e.target.checked;
+                    setUseAiSummaries(newValue);
+                    localStorage.setItem('useAiSummaries', JSON.stringify(newValue));
+                  }}
+                  className="w-3.5 h-3.5 cursor-pointer"
+                />
+                <span className="font-semibold bg-linear-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
+                  AI
+                </span>
+              </label>
               {user ? (
                 <>
                   <span className="hidden sm:inline text-gray-600 truncate max-w-[200px]">

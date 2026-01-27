@@ -56,12 +56,16 @@ async function fetchArticlesInRange(startDate: string, endDate: string) {
       const publishedAt = getPublishedDate(item);
       if (publishedAt > end) continue;
 
+      const postBody = item.item.additionalFields.postBody;
+
       articles.push({
         awsSourceId: item.item.id,
         title: item.item.additionalFields.headline || '',
         url: item.item.additionalFields.headlineUrl!,
-        description: stripHtml(item.item.additionalFields.postBody),
+        description: stripHtml(postBody),
+        rawHtml: postBody || null,
         publishedAt: publishedAt.toISOString(),
+        blogUrls: extractBlogUrls(postBody), // Just extract URLs, fetch titles later for new articles only
       });
     }
   }
@@ -103,8 +107,83 @@ function getPublishedDate(item: NewsItem): Date {
 }
 
 /** Strip HTML tags from string */
-function stripHtml(html: string | null | undefined): string | undefined {
+export function stripHtml(html: string | null | undefined): string | undefined {
   return html?.replace(/<[^>]*>/g, '').trim() || undefined;
+}
+
+export interface BlogPost {
+  url: string;
+  title: string;
+}
+
+/** Extract AWS blog URLs from HTML content */
+export function extractBlogUrls(html: string | null | undefined): string[] {
+  if (!html) return [];
+
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  // Match anchor tags with href
+  const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>/gi;
+
+  let match;
+  while ((match = linkRegex.exec(html)) !== null) {
+    const url = match[1];
+
+    // Only AWS blog URLs
+    if (!url.includes('aws.amazon.com/blogs/')) continue;
+    if (seen.has(url)) continue;
+
+    seen.add(url);
+    urls.push(url);
+  }
+
+  return urls;
+}
+
+/** Fetch blog post title from URL */
+export async function fetchBlogTitle(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'AWS-Newsroom-Bot/1.0' },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+
+    if (!titleMatch) return null;
+
+    // Clean up title - remove " | AWS Blog Name" suffix
+    let title = titleMatch[1].trim();
+    title = title.replace(/\s*\|.*$/, '').trim();
+
+    return title || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Extract blog posts with titles from HTML content */
+export async function extractBlogPosts(html: string | null | undefined): Promise<BlogPost[]> {
+  const urls = extractBlogUrls(html);
+  const posts: BlogPost[] = [];
+
+  for (const url of urls) {
+    const title = await fetchBlogTitle(url);
+    if (title) {
+      posts.push({ url, title });
+    }
+  }
+
+  return posts;
+}
+
+/** Generate deterministic link ID from article ID and URL */
+function generateLinkId(articleId: string, url: string): string {
+  return crypto.createHash('sha256').update(`${articleId}:${url}`).digest('hex').substring(0, 32);
 }
 
 /** Generate deterministic article ID */
@@ -116,6 +195,7 @@ function generateArticleId(awsSourceId: string): string {
 async function storeArticles(articles: Awaited<ReturnType<typeof fetchArticlesInRange>>) {
   let inserted = 0;
   let skipped = 0;
+  let linksInserted = 0;
 
   for (const article of articles) {
     const articleId = generateArticleId(article.awsSourceId);
@@ -132,8 +212,8 @@ async function storeArticles(articles: Awaited<ReturnType<typeof fetchArticlesIn
       }
 
       await query(
-        `INSERT INTO news_articles (article_id, aws_source_id, source, title, url, description, published_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO news_articles (article_id, aws_source_id, source, title, url, description, raw_html, published_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           articleId,
           article.awsSourceId,
@@ -141,16 +221,36 @@ async function storeArticles(articles: Awaited<ReturnType<typeof fetchArticlesIn
           article.title,
           article.url,
           article.description,
+          article.rawHtml,
           article.publishedAt,
         ]
       );
       inserted++;
+
+      // Fetch blog titles and store - only for new articles
+      for (const blogUrl of article.blogUrls) {
+        const title = await fetchBlogTitle(blogUrl);
+        if (!title) continue;
+
+        const linkId = generateLinkId(articleId, blogUrl);
+        try {
+          await query(
+            `INSERT INTO article_links (link_id, article_id, url, title, domain)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT DO NOTHING`,
+            [linkId, articleId, blogUrl, title, 'aws.amazon.com']
+          );
+          linksInserted++;
+        } catch (linkError) {
+          logger.warn('Failed to store blog post', { articleId, url: blogUrl, error: linkError });
+        }
+      }
     } catch (error) {
       logger.error('Failed to store article', { articleId, error });
       skipped++;
     }
   }
 
-  logger.info('Storage completed', { inserted, skipped });
-  return { inserted, skipped };
+  logger.info('Storage completed', { inserted, skipped, linksInserted });
+  return { inserted, skipped, linksInserted };
 }
