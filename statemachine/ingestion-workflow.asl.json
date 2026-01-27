@@ -1,67 +1,30 @@
 {
-  "Comment": "AWS News and Blog Ingestion Workflow with AI Summary Generation",
+  "Comment": "AWS News Ingestion Workflow with AI Summary Generation",
   "QueryLanguage": "JSONata",
-  "StartAt": "ParallelIngestion",
+  "StartAt": "IngestNews",
   "States": {
-    "ParallelIngestion": {
-      "Type": "Parallel",
-      "Comment": "Ingest news and blog articles in parallel",
-      "Branches": [
+    "IngestNews": {
+      "Type": "Task",
+      "Comment": "Ingest AWS What's New announcements",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${IngestNewsFunction}",
+        "Payload": "{% $states.input %}"
+      },
+      "Retry": [
         {
-          "StartAt": "IngestNews",
-          "States": {
-            "IngestNews": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Arguments": {
-                "FunctionName": "${IngestNewsFunction}",
-                "Payload": "{% $states.input %}"
-              },
-              "Retry": [
-                {
-                  "ErrorEquals": [
-                    "Lambda.ServiceException",
-                    "Lambda.AWSLambdaException",
-                    "Lambda.SdkClientException"
-                  ],
-                  "IntervalSeconds": 2,
-                  "MaxAttempts": 3,
-                  "BackoffRate": 2
-                }
-              ],
-              "End": true
-            }
-          }
-        },
-        {
-          "StartAt": "IngestBlog",
-          "States": {
-            "IngestBlog": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Arguments": {
-                "FunctionName": "${IngestBlogFunction}",
-                "Payload": "{% $states.input %}"
-              },
-              "Retry": [
-                {
-                  "ErrorEquals": [
-                    "Lambda.ServiceException",
-                    "Lambda.AWSLambdaException",
-                    "Lambda.SdkClientException"
-                  ],
-                  "IntervalSeconds": 2,
-                  "MaxAttempts": 3,
-                  "BackoffRate": 2
-                }
-              ],
-              "End": true
-            }
-          }
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
         }
       ],
       "Assign": {
-        "ingestionResults": "{% $states.result %}"
+        "ingestionResult": "{% $states.result.Payload %}"
       },
       "Next": "GenerateSummaries"
     },
@@ -88,7 +51,7 @@
         }
       ],
       "Output": {
-        "ingestion": "{% $ingestionResults %}",
+        "ingestion": "{% $ingestionResult %}",
         "summaries": "{% $states.result.Payload %}"
       },
       "End": true

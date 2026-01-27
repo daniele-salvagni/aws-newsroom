@@ -1,10 +1,4 @@
-/**
- * Extract unique hashtags from text with normalization:
- * - Converted to lowercase
- * - Length between 1 and 100 characters
- * - # symbol stripped
- */
-
+/** Extract unique lowercase hashtags from text (1-100 chars, # stripped) */
 export function extractHashtags(text: string): string[] {
   const hashtagRegex = /#([a-zA-Z0-9_-]+)/g;
   const matches = text.matchAll(hashtagRegex);

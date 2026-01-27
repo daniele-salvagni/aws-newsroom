@@ -2,6 +2,9 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { queryOne } from '../../lib/db.js';
 import { success, error, notFound } from '../../lib/response.js';
 import { getUserFromEvent } from '../../lib/auth.js';
+import { createLogger } from '../../lib/logger.js';
+
+const logger = createLogger('articles-get');
 
 interface ArticleQueryResult {
   article_id: string;
@@ -16,6 +19,7 @@ interface ArticleQueryResult {
   star_count: number;
 }
 
+/** Get a single article by ID */
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
     const articleId = event.pathParameters?.articleId;
@@ -24,21 +28,17 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return error('Article ID is required', 400);
     }
 
-    // Enforced by API Gateway anyway, but could be optional
     const user = getUserFromEvent(event);
 
     const article = await queryOne<ArticleQueryResult>(
-      `
-      SELECT
-        a.*,
-        COUNT(DISTINCT c.comment_id)::INTEGER as comment_count,
-        COUNT(DISTINCT s.star_id)::INTEGER as star_count
-      FROM news_articles a
-      LEFT JOIN comments c ON a.article_id = c.article_id
-      LEFT JOIN user_starred_articles s ON a.article_id = s.article_id
-      WHERE a.article_id = $1
-      GROUP BY a.article_id
-    `,
+      `SELECT a.*,
+              COUNT(DISTINCT c.comment_id)::INTEGER as comment_count,
+              COUNT(DISTINCT s.star_id)::INTEGER as star_count
+       FROM news_articles a
+       LEFT JOIN comments c ON a.article_id = c.article_id
+       LEFT JOIN user_starred_articles s ON a.article_id = s.article_id
+       WHERE a.article_id = $1
+       GROUP BY a.article_id`,
       [articleId]
     );
 
@@ -46,14 +46,10 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return notFound('Article not found');
     }
 
-    // Check if current user has starred this article
     let isStarred = false;
     if (user) {
       const starredCheck = await queryOne(
-        `
-        SELECT star_id FROM user_starred_articles
-        WHERE user_id = $1 AND article_id = $2
-      `,
+        `SELECT star_id FROM user_starred_articles WHERE user_id = $1 AND article_id = $2`,
         [user.userId, articleId]
       );
       isStarred = !!starredCheck;
@@ -75,7 +71,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       },
     });
   } catch (err) {
-    console.error('Error getting article:', err);
+    logger.error('Failed to get article', { error: err });
     return error('Failed to get article');
   }
 }
