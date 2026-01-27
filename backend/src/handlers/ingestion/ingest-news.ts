@@ -29,15 +29,23 @@ export const handler = async (event: IngestionInput) => {
 
 /** Calculate date range from input parameters */
 function getDateRange(input: IngestionInput): { start: string; end: string } {
-  const end = new Date();
-
-  if (input.startDate && input.endDate) {
-    return { start: input.startDate, end: input.endDate };
+  // endDate without startDate is invalid
+  if (input.endDate && !input.startDate) {
+    throw new Error('endDate requires startDate to be specified');
   }
 
+  const now = new Date();
+  const end = input.endDate ?? now.toISOString();
+
+  // If startDate provided, use it with endDate (or now)
+  if (input.startDate) {
+    return { start: input.startDate, end };
+  }
+
+  // Otherwise use daysBack (defaults to 7)
   const start = new Date();
   start.setDate(start.getDate() - (input.daysBack ?? 7));
-  return { start: start.toISOString(), end: end.toISOString() };
+  return { start: start.toISOString(), end };
 }
 
 /** Fetch all articles within date range across years */
