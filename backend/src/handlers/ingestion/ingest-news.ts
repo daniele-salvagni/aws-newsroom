@@ -1,180 +1,128 @@
 import crypto from 'node:crypto';
 import { query } from '../../lib/db.js';
-import { fetchPageOfNews } from '../../lib/aws-news-client.js';
+import { fetchNews, type NewsItem } from '../../lib/aws-news/index.js';
+import { createLogger } from '../../lib/logger.js';
+
+const logger = createLogger('ingest-news');
+const PAGE_SIZE = 100;
+const SOURCE = 'aws-news';
 
 interface IngestionInput {
   startDate?: string;
   endDate?: string;
-  daysBack?: number; // Alternative: number of days to look back
+  daysBack?: number;
 }
 
-interface ArticleData {
-  awsSourceId: string;
-  title: string;
-  url: string;
-  description?: string;
-  content?: string;
-  author?: string;
-  publishedAt: string;
-}
-
+/** Lambda handler for ingesting AWS What's New announcements */
 export const handler = async (event: IngestionInput) => {
-  console.log('Starting AWS News ingestion', event);
+  logger.info('Starting AWS News ingestion', { event });
 
-  const { startDate, endDate, daysBack } = event;
+  const { start, end } = getDateRange(event);
+  logger.info('Date range calculated', { start, end });
 
-  // Calculate date range
-  let start: Date;
-  let end: Date = new Date();
+  const articles = await fetchArticlesInRange(start, end);
+  const result = await storeArticles(articles);
 
-  if (startDate && endDate) {
-    start = new Date(startDate);
-    end = new Date(endDate);
-  } else if (daysBack) {
-    start = new Date();
-    start.setDate(start.getDate() - daysBack);
-  } else {
-    // Default: last 7 days
-    start = new Date();
-    start.setDate(start.getDate() - 7);
-  }
-
-  console.log(`Ingesting news from ${start.toISOString()} to ${end.toISOString()}`);
-
-  try {
-    // Fetch articles from AWS News RSS/API
-    const articles = await fetchAwsNews(start, end);
-
-    // Store articles in database
-    const result = await storeArticles(articles, 'aws-news');
-
-    return {
-      statusCode: 200,
-      source: 'aws-news',
-      articlesProcessed: articles.length,
-      articlesInserted: result.inserted,
-      articlesSkipped: result.skipped,
-      dateRange: {
-        start: start.toISOString(),
-        end: end.toISOString(),
-      },
-    };
-  } catch (error) {
-    console.error('Error ingesting news:', error);
-    throw error;
-  }
+  logger.info('Ingestion completed', { ...result, total: articles.length });
+  return { statusCode: 200, ...result, dateRange: { start, end } };
 };
 
-function stripHtml(html: string | null | undefined): string | null {
-  if (!html) return null;
-  return html.replace(/<[^>]*>/g, '').trim();
+/** Calculate date range from input parameters */
+function getDateRange(input: IngestionInput): { start: string; end: string } {
+  const end = new Date();
+
+  if (input.startDate && input.endDate) {
+    return { start: input.startDate, end: input.endDate };
+  }
+
+  const start = new Date();
+  start.setDate(start.getDate() - (input.daysBack ?? 7));
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/** Fetch all articles within date range across years */
+async function fetchArticlesInRange(startDate: string, endDate: string) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const years = getYearRange(
+    start.getFullYear(),
+    Math.min(end.getFullYear(), new Date().getFullYear())
+  );
+
+  const articles = [];
+
+  for (const year of years) {
+    for await (const item of paginateYear(year, start)) {
+      const publishedAt = getPublishedDate(item);
+      if (publishedAt > end) continue;
+
+      articles.push({
+        awsSourceId: item.item.id,
+        title: item.item.additionalFields.headline || '',
+        url: item.item.additionalFields.headlineUrl!,
+        description: stripHtml(item.item.additionalFields.postBody),
+        publishedAt: publishedAt.toISOString(),
+      });
+    }
+  }
+
+  logger.info('Articles fetched', { count: articles.length });
+  return articles;
+}
+
+/** Generate year range from most recent to oldest */
+function getYearRange(startYear: number, endYear: number): number[] {
+  return Array.from({ length: endYear - startYear + 1 }, (_, i) => endYear - i);
+}
+
+/** Paginate through a year's articles until we hit items older than startDate */
+async function* paginateYear(year: number, startDate: Date): AsyncGenerator<NewsItem> {
+  for (let page = 1; ; page++) {
+    const { items } = await fetchNews({ year, page, pageSize: PAGE_SIZE });
+    if (items.length === 0) break;
+
+    let hasItemsInRange = false;
+
+    for (const item of items) {
+      if (!item.item.additionalFields.headlineUrl) continue;
+
+      const publishedAt = getPublishedDate(item);
+      if (publishedAt < startDate) continue;
+
+      hasItemsInRange = true;
+      yield item;
+    }
+
+    if (!hasItemsInRange) break;
+  }
+}
+
+/** Extract published date from news item */
+function getPublishedDate(item: NewsItem): Date {
+  return new Date(item.item.additionalFields.postDateTime || item.item.dateCreated);
+}
+
+/** Strip HTML tags from string */
+function stripHtml(html: string | null | undefined): string | undefined {
+  return html?.replace(/<[^>]*>/g, '').trim() || undefined;
+}
+
+/** Generate deterministic article ID */
 function generateArticleId(awsSourceId: string): string {
   return crypto.createHash('sha256').update(awsSourceId).digest('hex').substring(0, 32);
 }
 
-async function fetchAwsNews(startDate: Date, endDate: Date): Promise<ArticleData[]> {
-  console.log('Fetching AWS News articles...');
-
-  const articles: ArticleData[] = [];
-  const currentYear = new Date().getFullYear();
-  const startYear = startDate.getFullYear();
-  const endYear = endDate.getFullYear();
-  const PAGE_SIZE = 100;
-
-  // Fetch articles for each year in the date range
-  // Start from the most recent year in the range (or current year if endDate is in the future)
-  const maxYear = Math.min(currentYear, endYear);
-
-  for (let year = maxYear; year >= startYear; year--) {
-    console.log(`Fetching What's New for year ${year}...`);
-
-    let pageNumber = 1;
-    let shouldContinue = true;
-    let totalFetched = 0;
-
-    while (shouldContinue) {
-      const response = await fetchPageOfNews({
-        year,
-        pageNumber,
-        pageSize: PAGE_SIZE,
-      });
-
-      totalFetched += response.items.length;
-      console.log(
-        `Page ${pageNumber}: Fetched ${response.items.length} articles (${totalFetched}/${response.metadata.totalHits} total)`
-      );
-
-      // Process items on this page
-      let foundItemsInRange = false;
-      let allItemsTooOld = true;
-
-      for (const { item } of response.items) {
-        const url = item.additionalFields.headlineUrl;
-        if (!url) continue;
-
-        const publishedAt = new Date(item.additionalFields.postDateTime || item.dateCreated);
-
-        // Check if item is too old (since sorted desc, once we hit old items we can stop)
-        if (publishedAt < startDate) {
-          continue;
-        }
-
-        allItemsTooOld = false;
-
-        // Check if item is in range
-        if (publishedAt <= endDate) {
-          foundItemsInRange = true;
-          articles.push({
-            awsSourceId: item.id,
-            title: item.additionalFields.headline || '',
-            url,
-            description: stripHtml(item.additionalFields.postBody) || undefined,
-            content: undefined,
-            author: item.author || undefined,
-            publishedAt: publishedAt.toISOString(),
-          });
-        }
-      }
-
-      // Stop conditions:
-      // 1. No more items on this page
-      // 2. All items are too old (before startDate)
-      // 3. We fetched all available items
-      if (
-        response.items.length === 0 ||
-        allItemsTooOld ||
-        totalFetched >= response.metadata.totalHits
-      ) {
-        shouldContinue = false;
-      } else {
-        pageNumber++;
-      }
-    }
-
-    console.log(`Year ${year}: Found ${articles.length} total articles so far`);
-  }
-
-  console.log(`Found ${articles.length} articles in date range`);
-  return articles;
-}
-
-async function storeArticles(articles: ArticleData[], source: string) {
+/** Store articles in database, skipping duplicates */
+async function storeArticles(articles: Awaited<ReturnType<typeof fetchArticlesInRange>>) {
   let inserted = 0;
   let skipped = 0;
 
   for (const article of articles) {
+    const articleId = generateArticleId(article.awsSourceId);
+
     try {
-      const articleId = generateArticleId(article.awsSourceId);
-
-      // Generate content hash for change detection
-      const contentHash = article.content
-        ? crypto.createHash('sha256').update(article.content).digest('hex')
-        : null;
-
       // Check if article already exists
-      const existing = await query(`SELECT article_id FROM news_articles WHERE article_id = $1`, [
+      const existing = await query('SELECT 1 FROM news_articles WHERE article_id = $1', [
         articleId,
       ]);
 
@@ -183,28 +131,26 @@ async function storeArticles(articles: ArticleData[], source: string) {
         continue;
       }
 
-      // Insert new article (full text in description for AI summary generation)
       await query(
-        `INSERT INTO news_articles (
-          article_id, aws_source_id, source, title, url, description, published_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO news_articles (article_id, aws_source_id, source, title, url, description, published_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           articleId,
           article.awsSourceId,
-          source,
+          SOURCE,
           article.title,
           article.url,
-          article.description, // Full text - will be replaced by AI summary
+          article.description,
           article.publishedAt,
         ]
       );
-
       inserted++;
     } catch (error) {
-      console.error(`Error storing article ${article.url}:`, error);
-      // Continue with next article
+      logger.error('Failed to store article', { articleId, error });
+      skipped++;
     }
   }
 
+  logger.info('Storage completed', { inserted, skipped });
   return { inserted, skipped };
 }
