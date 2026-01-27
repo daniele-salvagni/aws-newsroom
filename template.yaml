@@ -390,15 +390,12 @@ Resources:
       DefinitionUri: statemachine/ingestion-workflow.asl.json
       DefinitionSubstitutions:
         IngestNewsFunction: !GetAtt IngestNewsFunction.Arn
-        IngestBlogFunction: !GetAtt IngestBlogFunction.Arn
         GenerateSummariesFunction: !GetAtt GenerateSummariesFunction.Arn
       Tracing:
         Enabled: true
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref IngestNewsFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref IngestBlogFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref GenerateSummariesFunction
       Events:
@@ -454,23 +451,6 @@ Resources:
     Properties:
       CodeUri: backend/
       Handler: dist/handlers/ingestion/ingest-news.handler
-      Timeout: 300
-      MemorySize: 1024
-      Environment:
-        Variables:
-          AURORA_ENDPOINT: !GetAtt AuroraDSQLCluster.Endpoint
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - dsql:DbConnectAdmin
-              Resource: !GetAtt AuroraDSQLCluster.ResourceArn
-
-  IngestBlogFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: backend/
-      Handler: dist/handlers/ingestion/ingest-blog.handler
       Timeout: 300
       MemorySize: 1024
       Environment:
