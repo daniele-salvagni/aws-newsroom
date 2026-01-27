@@ -47,7 +47,7 @@ export default function HashtagText({ text, onHashtagClick }: HashtagTextProps) 
               e.stopPropagation();
               onHashtagClick(part.content);
             }}
-            className="text-violet-600 hover:text-black hover:underline"
+            className="text-violet-600 dark:text-violet-400 hover:text-black dark:hover:text-white hover:underline"
           >
             #{part.content}
           </a>

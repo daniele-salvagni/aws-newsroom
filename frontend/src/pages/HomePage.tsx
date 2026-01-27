@@ -187,7 +187,7 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-12">
-        <h1 className="text-lg font-semibold mb-4 text-center">Sign in to view AWS Newsroom</h1>
+        <h1 className="text-lg font-semibold mb-4 text-center text-black dark:text-white">Sign in to view AWS Newsroom</h1>
         <CustomAuthenticator />
       </div>
     );
@@ -195,12 +195,12 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
 
   return (
     <div>
-      <div className="mb-4 pb-3 border-b border-gray-200">
+      <div className="mb-4 pb-3 border-b border-gray-200 dark:border-stone-800">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-lg font-semibold flex items-center gap-3">
+          <h1 className="text-lg font-semibold flex items-center gap-3 text-black dark:text-white">
             Latest AWS News
             {filters.hashtag && (
-              <span className="text-sm font-normal text-violet-600">
+              <span className="text-sm font-normal text-violet-600 dark:text-violet-400">
                 #{filters.hashtag}
                 <a
                   href="#"
@@ -208,7 +208,7 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
                     e.preventDefault();
                     handleFilterChange({ hashtag: '' });
                   }}
-                  className="ml-2 text-gray-400 hover:text-black"
+                  className="ml-2 text-gray-400 hover:text-black dark:hover:text-white"
                 >
                   ×
                 </a>
@@ -225,7 +225,7 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
               <img 
                 src={import.meta.env.VITE_BRANDING_LOGO_URL} 
                 alt="Branding" 
-                className="h-5"
+                className="h-5 dark:brightness-0 dark:invert"
               />
             </a>
           )}
@@ -233,7 +233,7 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
       </div>
 
       {error && (
-        <div className="bg-gray-50 border border-gray-200 text-sm px-3 py-2 mb-6">{error}</div>
+        <div className="bg-gray-50 dark:bg-stone-800 border border-gray-200 dark:border-stone-700 text-sm px-3 py-2 mb-6 text-gray-700 dark:text-stone-300">{error}</div>
       )}
 
       {/* Up Next - show on unfiltered view or when filtering by source only */}
@@ -269,22 +269,22 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
           });
 
           return (
-            <div className="mb-4 bg-linear-to-r from-fuchsia-50 to-violet-50 px-3 py-2 rounded border-l-2 border-fuchsia-400">
+            <div className="mb-4 bg-linear-to-r from-fuchsia-50 to-violet-50 dark:from-fuchsia-950/30 dark:to-violet-950/30 px-3 py-2 rounded border-l-2 border-fuchsia-400 dark:border-fuchsia-500">
               <div className="flex items-baseline gap-2 text-xs">
-                <span className="text-fuchsia-600 font-medium">{upcomingEvent.category}</span>
-                <span className="text-gray-400">·</span>
+                <span className="text-fuchsia-600 dark:text-fuchsia-400 font-medium">{upcomingEvent.category}</span>
+                <span className="text-gray-400 dark:text-stone-600">·</span>
                 <span
-                  className="text-gray-700 font-medium"
+                  className="text-gray-700 dark:text-stone-300 font-medium"
                   title={`${formattedDate} ${formattedTime}`}
                 >
                   {timeRemaining}
                 </span>
-                <span className="text-gray-400">·</span>
+                <span className="text-gray-400 dark:text-stone-600">·</span>
                 <a
                   href={upcomingEvent.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-violet-700 hover:text-black hover:underline"
+                  className="text-violet-700 dark:text-violet-400 hover:text-black dark:hover:text-white hover:underline"
                 >
                   {upcomingEvent.title}
                 </a>
@@ -294,7 +294,7 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
         })()}
 
       {popularHashtags.length > 0 ? (
-        <div className="mb-6 text-xs text-gray-500">
+        <div className="mb-6 text-xs text-gray-500 dark:text-stone-500">
           <span className="mr-2">Popular:</span>
           {popularHashtags.map(({ hashtag, articleCount }, idx) => (
             <span key={hashtag}>
@@ -306,18 +306,18 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
                 }}
                 className={`transition-colors ${
                   filters.hashtag === hashtag
-                    ? 'text-violet-600 font-medium'
-                    : 'text-gray-600 hover:text-black hover:underline'
+                    ? 'text-violet-600 dark:text-violet-400 font-medium'
+                    : 'text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white hover:underline'
                 }`}
               >
-                #{hashtag} <span className="text-gray-400">({articleCount})</span>
+                #{hashtag} <span className="text-gray-400 dark:text-stone-600">({articleCount})</span>
               </a>
               {idx < popularHashtags.length - 1 && <span className="mx-1.5">·</span>}
             </span>
           ))}
         </div>
       ) : (
-        <div className="mb-4 text-xs text-gray-500">
+        <div className="mb-4 text-xs text-gray-500 dark:text-stone-500">
           <span className="mr-2">Popular:</span>
           <span className="italic">
             No tags yet. Add #hashtags in your comments to organize articles!
@@ -339,7 +339,7 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
           return (
             <div key={article.articleId}>
               {showReinventDivider && (
-                <div className="py-2 text-xs text-fuchsia-600 text-center border-dashed border-t border-fuchsia-400">
+                <div className="py-2 text-xs text-fuchsia-600 dark:text-fuchsia-400 text-center border-dashed border-t border-fuchsia-400 dark:border-fuchsia-600">
                   ↑ pre-re:Invent 2025
                 </div>
               )}
@@ -382,21 +382,21 @@ export default function HomePage({ useAiSummaries }: HomePageProps) {
 
       {loading && (
         <div className="text-center py-8">
-          <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-black"></div>
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 dark:border-stone-600 border-t-black dark:border-t-white"></div>
         </div>
       )}
 
       {!loading && articles.length === 0 && (
-        <div className="text-center py-12 text-sm text-gray-500">
+        <div className="text-center py-12 text-sm text-gray-500 dark:text-stone-500">
           No articles found. Try adjusting your filters.
         </div>
       )}
 
       {!loading && hasMore && (
-        <div className="text-center mt-6 pt-4 border-t border-gray-100">
+        <div className="text-center mt-6 pt-4 border-t border-gray-100 dark:border-stone-800">
           <button
             onClick={() => setPage((p) => p + 1)}
-            className="text-sm text-gray-600 hover:text-black underline"
+            className="text-sm text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white underline cursor-pointer"
           >
             Load More
           </button>
