@@ -41,7 +41,7 @@ type TagFormat = keyof typeof TAG_FORMATS;
 export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
   const { year, page, pageSize = DEFAULT_PAGE_SIZE } = options;
 
-  logger.info({ year, page, pageSize }, 'Fetching news articles');
+  logger.info('Fetching news articles', { year, page, pageSize });
 
   const diagnostics: FetchDiagnostics = {
     year,
@@ -63,10 +63,10 @@ export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
       const response = await fetchWithTag(tagId, page, pageSize);
       diagnostics.tagFormatResults[formatName] = response.items.length;
       allItems.push(...response.items);
-      logger.debug({ formatName, itemCount: response.items.length }, 'Tag format fetch succeeded');
+      logger.debug('Tag format fetch succeeded', { formatName, itemCount: response.items.length });
     } catch (err) {
       diagnostics.tagFormatResults[formatName] = 0;
-      logger.warn({ formatName, year, error: err }, 'Tag format fetch failed');
+      logger.warn('Tag format fetch failed', { formatName, year, error: err });
     }
   }
 
@@ -82,16 +82,13 @@ export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
   // Sort by date descending
   const sortedItems = sortByDateDesc(uniqueItems);
 
-  logger.info(
-    {
-      year,
-      page,
-      totalItems: sortedItems.length,
-      duplicatesRemoved: diagnostics.duplicatesRemoved,
-      mismatchedItems: diagnostics.itemsWithMismatchedYearTag.length,
-    },
-    'News fetch completed'
-  );
+  logger.info('News fetch completed', {
+    year,
+    page,
+    totalItems: sortedItems.length,
+    duplicatesRemoved: diagnostics.duplicatesRemoved,
+    mismatchedItems: diagnostics.itemsWithMismatchedYearTag.length,
+  });
 
   return {
     items: sortedItems,
@@ -104,11 +101,11 @@ export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
 async function fetchWithTag(tagId: string, page: number, pageSize: number): Promise<APIResponse> {
   return withRetry(async () => {
     const url = buildUrl(tagId, page, pageSize);
-    logger.debug({ url }, 'Fetching from API');
+    logger.debug('Fetching from API', { url });
     const response = await fetch(url);
 
     if (!response.ok) {
-      logger.error({ status: response.status, url }, 'API request failed');
+      logger.error('API request failed', { status: response.status, url });
       throw new Error(`API request failed: ${response.status}`);
     }
 

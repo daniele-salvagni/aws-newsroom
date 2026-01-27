@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from 'pino';
 
 /**
  * Extract X-Ray trace ID from environment variable
@@ -15,13 +15,26 @@ function getTraceId(): string | undefined {
   return match ? match[1] : undefined;
 }
 
-/** Create a Pino logger with X-Ray trace ID support */
+/** Create a Pino logger with nested data and X-Ray trace ID support */
 export function createLogger(name: string) {
-  const traceId = getTraceId();
-
-  return pino({
+  const baseLogger = pino({
     name,
-    level: process.env.LOG_LEVEL || "info",
-    ...(traceId && { traceId }),
+    level: process.env.LOG_LEVEL || 'info',
+    base: undefined,
+    timestamp: pino.stdTimeFunctions.isoTime,
+    mixin: () => {
+      const traceId = getTraceId();
+      return traceId ? { traceId } : {};
+    },
   });
+
+  /** Wrap data under 'data' key for cleaner logs */
+  const wrapData = (data?: object) => (data ? { data } : {});
+
+  return {
+    debug: (msg: string, data?: object) => baseLogger.debug(wrapData(data), msg),
+    info: (msg: string, data?: object) => baseLogger.info(wrapData(data), msg),
+    warn: (msg: string, data?: object) => baseLogger.warn(wrapData(data), msg),
+    error: (msg: string, data?: object) => baseLogger.error(wrapData(data), msg),
+  };
 }
