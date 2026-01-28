@@ -18,9 +18,8 @@ full control and ownership of your data and discussions.
 
 ## Project Status
 
-⚠️ This is a first release in active development. While the core features are
-implemented and functional, expect limitations or occasional extra steps for
-version upgrades.
+⚠️ In active development. While the core features are implemented and
+functional, expect limitations or manual steps for version upgrades.
 
 ## Architecture
 
@@ -28,63 +27,81 @@ Fully serverless application running on: Amazon API Gateway, AWS Lambda
 Functions, Amazon Aurora DSQL, AWS Step Functions, Amazon Cognito, Amazon S3,
 Amazon EventBridge. (no diagrams yet)
 
-## Deployment Guide
+## Deployment
 
-### Pre-requisites
+### Prerequisites
 
 - AWS CLI
 - AWS SAM CLI
-- Node.js
+- Node.js (see `.node-version`)
 
-### Deployment Steps
+### Environment Variables
 
-1. Check if you are ok with the defaults in `deploy.sh`
+| Variable               | Required | Description                                              |
+| ---------------------- | -------- | -------------------------------------------------------- |
+| `STACK_NAME`           | Yes      | CloudFormation stack name                                |
+| `ENVIRONMENT`          | Yes      | Environment identifier (e.g., `prd`, `hlx`)              |
+| `ALLOWED_EMAIL_DOMAIN` | No       | Email domain for signup (default: `example.com`)         |
+| `AWS_REGION`           | No       | AWS region (default: `eu-central-1`)                     |
+| `DOMAIN_NAME`          | No       | Custom domain name                                       |
+| `CERTIFICATE_ARN`      | No\*     | ACM certificate ARN (\*required if `DOMAIN_NAME` is set) |
+| `HOSTED_ZONE_ID`       | No       | Route 53 hosted zone ID for DNS                          |
+| `BRANDING_LOGO_URL`    | No       | Custom logo URL                                          |
+| `BRANDING_LOGO_LINK`   | No       | Logo click-through URL                                   |
 
-2. Minimal configuration using defaults is:
+### Deploy
 
-   ```bash
-   ALLOWED_EMAIL_DOMAIN=yourcompany.com ./deploy.sh
-   ```
+```bash
+STACK_NAME=aws-newsroom-prd \
+ENVIRONMENT=prd \
+ALLOWED_EMAIL_DOMAIN=yourcompany.com \
+./deploy.sh
+```
 
-3. Initialize the database schema (first-time only):
+With custom domain:
 
-   ```bash
-   export AURORA_ENDPOINT=$(aws cloudformation describe-stacks \
-     --stack-name aws-newsroom-prd \
-     --region eu-central-1 \
-     --query 'Stacks[0].Outputs[?OutputKey==`AuroraEndpoint`].OutputValue' \
-     --output text)
+```bash
+STACK_NAME=aws-newsroom-prd \
+ENVIRONMENT=prd \
+ALLOWED_EMAIL_DOMAIN=yourcompany.com \
+DOMAIN_NAME=newsroom.yourcompany.com \
+CERTIFICATE_ARN=arn:aws:acm:us-east-1:123456789:certificate/xxx \
+HOSTED_ZONE_ID=Z0123456789 \
+./deploy.sh
+```
 
-   export PGPASSWORD=$(aws dsql generate-db-connect-admin-auth-token \
-     --hostname $AURORA_ENDPOINT \
-     --region eu-central-1)
+### Database Setup (first-time only)
 
-   psql -h $AURORA_ENDPOINT -U admin -d postgres -f database/init.sql
-   ```
+```bash
+export AURORA_ENDPOINT=$(aws cloudformation describe-stacks \
+  --stack-name aws-newsroom-prd \
+  --region eu-central-1 \
+  --query 'Stacks[0].Outputs[?OutputKey==`AuroraEndpoint`].OutputValue' \
+  --output text)
 
-4. Data is automatically ingested every hour. This feature comes disabled by
-   default, but can be activated by enabling the PeriodicIngestionRule through
-   the AWS Console or SAM Template. You can trigger ingestion manually by
-   invoking the Step Functions state machine from the AWS Console. You can use
-   the following payload to ingest the past N days of data:
+export PGPASSWORD=$(aws dsql generate-db-connect-admin-auth-token \
+  --hostname $AURORA_ENDPOINT \
+  --region eu-central-1)
 
-   ```json
-   {
-     "daysBack": N
-   }
-   ```
+psql -h $AURORA_ENDPOINT -U admin -d postgres -f database/init.sql
+```
 
-   To limit the blast radius (costs) in case of bugs or if AWS breaks something
-   by changing their APIs, the Lambda function for AI Summary generation has a
-   limit of 100 articles per invocation, so past articles will have their
-   summaries generated slowly over time unless you manually re-invoke the lambda
-   function multiple times manually.
+### Data Ingestion
 
-5. Access the frontend using the URL printed at the end of the deployment script
-   and sign up using an email address from the allowed domain.
+Data is ingested hourly (disabled by default). Enable via
+`PeriodicIngestionRule` in AWS Console or SAM template.
 
-6. (Optional) Events are currently managed manually through
-   `database/events.sql`.
+Manual trigger: invoke the Step Functions state machine with:
+
+```json
+{ "daysBack": 7 }
+```
+
+### CI/CD (GitHub Actions)
+
+For automated deployments, create a workflow using the OIDC role from
+`infra/github-oidc-role.yaml` and configure GitHub Environments with the
+variables above.
 
 ## Development
 
