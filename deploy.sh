@@ -49,9 +49,11 @@ if [ -n "$DOMAIN_NAME" ]; then
   log_info "Custom Domain: $DOMAIN_NAME"
 fi
 
-# Install dependencies
-log_info "Installing dependencies..."
-npm install
+# Install dependencies (skip if CI already ran npm ci)
+if [ -z "$CI" ]; then
+  log_info "Installing dependencies..."
+  npm install
+fi
 
 # Build backend
 log_info "Building backend..."
