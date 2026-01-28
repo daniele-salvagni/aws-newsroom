@@ -1,6 +1,6 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 
-const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3001';
+const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || '/api';
 
 async function getAuthHeaders(requireAuth = false): Promise<HeadersInit> {
   const headers: HeadersInit = {

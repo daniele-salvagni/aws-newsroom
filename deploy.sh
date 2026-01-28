@@ -2,29 +2,23 @@
 set -e
 
 # Configuration
-BACKEND_STACK="${BACKEND_STACK:-aws-newsroom-prd}"
-FRONTEND_STACK="${FRONTEND_STACK:-aws-newsroom-ui-prd}"
+STACK_NAME="${STACK_NAME:-aws-newsroom-prd}"
 ENVIRONMENT="${ENVIRONMENT:-prd}"
-ALLOWED_EMAIL_DOMAIN="${ALLOWED_EMAIL_DOMAIN:-helixcloud.ch}"
+ALLOWED_EMAIL_DOMAIN="${ALLOWED_EMAIL_DOMAIN:-example.com}"
 AWS_REGION="${AWS_REGION:-eu-central-1}"
+DOMAIN_NAME="${DOMAIN_NAME:-}"
+CERTIFICATE_ARN="${CERTIFICATE_ARN:-}"
+HOSTED_ZONE_ID="${HOSTED_ZONE_ID:-}"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-log_info() {
-  echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-  echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-  echo -e "${RED}[ERROR]${NC} $1"
-}
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Validate AWS credentials
 if ! aws sts get-caller-identity &>/dev/null; then
@@ -32,116 +26,79 @@ if ! aws sts get-caller-identity &>/dev/null; then
   exit 1
 fi
 
-log_info "Using AWS Region: $AWS_REGION"
-log_info "Backend Stack: $BACKEND_STACK"
-log_info "Frontend Stack: $FRONTEND_STACK"
+log_info "Stack: $STACK_NAME"
+log_info "Region: $AWS_REGION"
 log_info "Allowed Email Domain: $ALLOWED_EMAIL_DOMAIN"
+if [ -n "$DOMAIN_NAME" ]; then
+  log_info "Custom Domain: $DOMAIN_NAME"
+fi
 
 # Install dependencies
 log_info "Installing dependencies..."
 npm install
 
-# Deploy Backend
+# Build backend
 log_info "Building backend..."
 npm run be:build
 
-log_info "Building SAM backend stack..."
+# Build SAM
+log_info "Building SAM stack..."
 sam build --template-file template.yaml
 
-log_info "Deploying backend stack..."
+# Deploy stack
+log_info "Deploying stack..."
+PARAM_OVERRIDES="AllowedEmailDomain=$ALLOWED_EMAIL_DOMAIN"
+if [ -n "$DOMAIN_NAME" ]; then
+  PARAM_OVERRIDES="$PARAM_OVERRIDES DomainName=$DOMAIN_NAME CertificateArn=$CERTIFICATE_ARN"
+fi
+if [ -n "$HOSTED_ZONE_ID" ]; then
+  PARAM_OVERRIDES="$PARAM_OVERRIDES HostedZoneId=$HOSTED_ZONE_ID"
+fi
+
 sam deploy \
-  --stack-name "$BACKEND_STACK" \
-  --parameter-overrides AllowedEmailDomain="$ALLOWED_EMAIL_DOMAIN" \
-  --tags Project="$BACKEND_STACK" Environment="$ENVIRONMENT" \
+  --stack-name "$STACK_NAME" \
+  --parameter-overrides $PARAM_OVERRIDES \
+  --tags "Project=$STACK_NAME" "Environment=$ENVIRONMENT" \
   --capabilities CAPABILITY_IAM \
   --resolve-s3 \
   --no-fail-on-empty-changeset \
-  --no-confirm-changeset \
   --region "$AWS_REGION"
 
-log_info "Backend deployed successfully"
+# Get outputs
+log_info "Retrieving stack outputs..."
+get_output() {
+  aws cloudformation describe-stacks \
+    --stack-name "$STACK_NAME" \
+    --region "$AWS_REGION" \
+    --query "Stacks[0].Outputs[?OutputKey==\`$1\`].OutputValue" \
+    --output text
+}
 
-# Get backend outputs
-log_info "Retrieving backend outputs..."
-API_ENDPOINT=$(aws cloudformation describe-stacks \
-  --stack-name "$BACKEND_STACK" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
-  --output text)
+USER_POOL_ID=$(get_output "UserPoolId")
+USER_POOL_CLIENT_ID=$(get_output "UserPoolClientId")
+BUCKET_NAME=$(get_output "FrontendBucketName")
+DISTRIBUTION_ID=$(get_output "CloudFrontDistributionId")
+CLOUDFRONT_URL=$(get_output "CloudFrontURL")
 
-USER_POOL_ID=$(aws cloudformation describe-stacks \
-  --stack-name "$BACKEND_STACK" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
-  --output text)
-
-USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
-  --stack-name "$BACKEND_STACK" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' \
-  --output text)
-
-if [ -z "$API_ENDPOINT" ] || [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ]; then
-  log_error "Failed to retrieve backend outputs"
+if [ -z "$USER_POOL_ID" ] || [ -z "$BUCKET_NAME" ] || [ -z "$DISTRIBUTION_ID" ]; then
+  log_error "Failed to retrieve stack outputs"
   exit 1
 fi
 
-log_info "API Endpoint: $API_ENDPOINT"
-log_info "User Pool ID: $USER_POOL_ID"
-log_info "User Pool Client ID: $USER_POOL_CLIENT_ID"
-
-# Configure frontend environment variables
-log_info "Configuring frontend environment variables..."
+# Configure frontend (API is now relative path via CloudFront)
+log_info "Configuring frontend..."
 cat > frontend/.env.production <<EOF
-VITE_API_ENDPOINT=$API_ENDPOINT
+VITE_API_ENDPOINT=/api
 VITE_USER_POOL_ID=$USER_POOL_ID
 VITE_USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID
 EOF
 
-# Deploy Frontend
+# Build frontend
 log_info "Building frontend..."
 npm run fe:build
 
-log_info "Building SAM frontend stack..."
-sam build --template-file template-ui.yaml
-
-log_info "Deploying frontend stack..."
-sam deploy \
-  --stack-name "$FRONTEND_STACK" \
-  --tags Project="$FRONTEND_STACK" Environment="$ENVIRONMENT" \
-  --capabilities CAPABILITY_IAM \
-  --resolve-s3 \
-  --no-fail-on-empty-changeset \
-  --no-confirm-changeset \
-  --region "$AWS_REGION"
-
-# Get frontend outputs
-log_info "Retrieving frontend outputs..."
-BUCKET_NAME=$(aws cloudformation describe-stacks \
-  --stack-name "$FRONTEND_STACK" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' \
-  --output text)
-
-DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-  --stack-name "$FRONTEND_STACK" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
-  --output text)
-
-CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
-  --stack-name "$FRONTEND_STACK" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontURL`].OutputValue' \
-  --output text)
-
-if [ -z "$BUCKET_NAME" ] || [ -z "$DISTRIBUTION_ID" ]; then
-  log_error "Failed to retrieve frontend outputs"
-  exit 1
-fi
-
-# Upload frontend files
-log_info "Uploading frontend files to S3..."
+# Upload frontend to S3
+log_info "Uploading frontend to S3..."
 aws s3 sync frontend/dist/ "s3://${BUCKET_NAME}/" \
   --region "$AWS_REGION" \
   --delete \
@@ -152,7 +109,7 @@ aws s3 cp frontend/dist/index.html "s3://${BUCKET_NAME}/index.html" \
   --region "$AWS_REGION" \
   --cache-control "no-cache, no-store, must-revalidate"
 
-# Invalidate CloudFront cache
+# Invalidate CloudFront
 log_info "Invalidating CloudFront cache..."
 INVALIDATION_ID=$(aws cloudfront create-invalidation \
   --distribution-id "$DISTRIBUTION_ID" \
@@ -160,14 +117,22 @@ INVALIDATION_ID=$(aws cloudfront create-invalidation \
   --query 'Invalidation.Id' \
   --output text)
 
-log_info "CloudFront invalidation created: $INVALIDATION_ID"
+log_info "CloudFront invalidation: $INVALIDATION_ID"
 
 # Summary
 echo ""
 log_info "====================================================================="
-log_info "Deployment completed successfully!"
+log_info "Deployment complete!"
 log_info "====================================================================="
-log_info "Backend Stack: $BACKEND_STACK"
-log_info "Frontend Stack: $FRONTEND_STACK"
-log_info "CloudFront URL: $CLOUDFRONT_URL"
+log_info "Stack: $STACK_NAME"
+log_info "URL: $CLOUDFRONT_URL"
+if [ -n "$DOMAIN_NAME" ]; then
+  log_info "Custom Domain: https://$DOMAIN_NAME"
+  if [ -z "$HOSTED_ZONE_ID" ]; then
+    log_info ""
+    log_info "Add DNS CNAME record:"
+    log_info "  Name:  $DOMAIN_NAME"
+    log_info "  Value: $(get_output 'CloudFrontDomainName')"
+  fi
+fi
 log_info "====================================================================="
