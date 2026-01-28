@@ -2,8 +2,8 @@
 set -e
 
 # Configuration
-STACK_NAME="${STACK_NAME:-aws-newsroom-prd}"
-ENVIRONMENT="${ENVIRONMENT:-prd}"
+STACK_NAME="${STACK_NAME:-}"
+ENVIRONMENT="${ENVIRONMENT:-}"
 ALLOWED_EMAIL_DOMAIN="${ALLOWED_EMAIL_DOMAIN:-example.com}"
 AWS_REGION="${AWS_REGION:-eu-central-1}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
@@ -19,6 +19,22 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Validate required environment variables
+MISSING_VARS=()
+[ -z "$STACK_NAME" ] && MISSING_VARS+=("STACK_NAME")
+[ -z "$ENVIRONMENT" ] && MISSING_VARS+=("ENVIRONMENT")
+
+if [ ${#MISSING_VARS[@]} -ne 0 ]; then
+  log_error "Missing required environment variables: ${MISSING_VARS[*]}"
+  exit 1
+fi
+
+# Validate domain + certificate go together
+if [ -n "$DOMAIN_NAME" ] && [ -z "$CERTIFICATE_ARN" ]; then
+  log_error "CERTIFICATE_ARN is required when DOMAIN_NAME is set"
+  exit 1
+fi
 
 # Validate AWS credentials
 if ! aws sts get-caller-identity &>/dev/null; then
