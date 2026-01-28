@@ -10,6 +10,10 @@ DOMAIN_NAME="${DOMAIN_NAME:-}"
 CERTIFICATE_ARN="${CERTIFICATE_ARN:-}"
 HOSTED_ZONE_ID="${HOSTED_ZONE_ID:-}"
 
+# Optional branding
+BRANDING_LOGO_URL="${BRANDING_LOGO_URL:-}"
+BRANDING_LOGO_LINK="${BRANDING_LOGO_LINK:-}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -110,6 +114,14 @@ VITE_API_ENDPOINT=/api
 VITE_USER_POOL_ID=$USER_POOL_ID
 VITE_USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID
 EOF
+
+# Add optional branding
+if [ -n "$BRANDING_LOGO_URL" ]; then
+  echo "VITE_BRANDING_LOGO_URL=$BRANDING_LOGO_URL" >> frontend/.env.production
+fi
+if [ -n "$BRANDING_LOGO_LINK" ]; then
+  echo "VITE_BRANDING_LOGO_LINK=$BRANDING_LOGO_LINK" >> frontend/.env.production
+fi
 
 # Build frontend
 log_info "Building frontend..."
