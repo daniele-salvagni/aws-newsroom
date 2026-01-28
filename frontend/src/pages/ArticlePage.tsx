@@ -122,10 +122,10 @@ export default function ArticlePage() {
     const isOwnComment = user && comment.userId === user.userId;
 
     return (
-      <div key={comment.commentId} className="text-sm text-gray-600 group py-1">
-        <span className="font-medium text-gray-900">{comment.displayName}</span>
-        <span className="text-gray-400 mx-1">·</span>
-        <span className="text-gray-400">
+      <div key={comment.commentId} className="text-sm text-gray-600 dark:text-stone-400 group py-1">
+        <span className="font-medium text-gray-900 dark:text-stone-200">{comment.displayName}</span>
+        <span className="text-gray-400 dark:text-stone-600 mx-1">·</span>
+        <span className="text-gray-400 dark:text-stone-600">
           {new Date(comment.createdAt).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
@@ -134,7 +134,7 @@ export default function ArticlePage() {
         {isOwnComment && (
           <button
             onClick={() => handleDeleteComment(comment.commentId)}
-            className="ml-2 text-gray-400 hover:text-red-600 cursor-pointer"
+            className="ml-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
             title="Delete comment"
           >
             ×
@@ -147,7 +147,7 @@ export default function ArticlePage() {
           />
         </div>
         {comment.replies.length > 0 && (
-          <div className="ml-4 mt-2 space-y-1 border-l border-gray-200 pl-3">
+          <div className="ml-4 mt-2 space-y-1 border-l border-gray-200 dark:border-stone-700 pl-3">
             {comment.replies.map(renderComment)}
           </div>
         )}
@@ -158,7 +158,7 @@ export default function ArticlePage() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-black"></div>
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 dark:border-stone-600 border-t-black dark:border-t-white"></div>
       </div>
     );
   }
@@ -166,8 +166,8 @@ export default function ArticlePage() {
   if (!article) {
     return (
       <div className="text-center py-12">
-        <p className="text-sm text-gray-500 mb-2">Article not found</p>
-        <Link to="/" className="text-sm hover:underline">
+        <p className="text-sm text-gray-500 dark:text-stone-500 mb-2">Article not found</p>
+        <Link to="/" className="text-sm hover:underline text-gray-700 dark:text-stone-300">
           ← Back to Home
         </Link>
       </div>
@@ -176,13 +176,13 @@ export default function ArticlePage() {
 
   return (
     <div>
-      <div className="mb-4 pb-3 border-b border-gray-200">
-        <Link to="/" className="text-xs text-gray-600 hover:text-black hover:underline">
+      <div className="mb-4 pb-3 border-b border-gray-200 dark:border-stone-800">
+        <Link to="/" className="text-xs text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white hover:underline">
           ← back
         </Link>
       </div>
 
-      <article className="border-b border-gray-200 pb-6 mb-6">
+      <article className="border-b border-gray-200 dark:border-stone-800 pb-6 mb-6">
         <div className="flex items-start justify-between gap-2 mb-1">
           <a
             href={
@@ -192,25 +192,43 @@ export default function ArticlePage() {
             rel="noopener noreferrer"
             className="hover:underline"
           >
-            <h1 className="text-sm font-medium text-black line-clamp-2 mb-2">{article.title}</h1>
+            <h1 className="text-sm font-medium text-black dark:text-stone-100 line-clamp-2 mb-2">{article.title}</h1>
           </a>
         </div>
 
-        {(article.aiSummary || article.description) && (
-          <div className="text-sm text-gray-600 mb-3 leading-relaxed">
-            {article.aiSummary && (
-              <span className="mr-1.5 text-xs font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
-                AI:
-              </span>
+        {(article.rawHtml || article.description) && (
+          <div className="text-sm text-gray-600 dark:text-stone-400 mb-3 leading-relaxed">
+            {article.rawHtml ? (
+              <div 
+                className="[&_a]:text-violet-600 dark:[&_a]:text-violet-400 [&_a]:underline [&_a:hover]:text-violet-800 dark:[&_a:hover]:text-violet-300"
+                dangerouslySetInnerHTML={{ __html: article.rawHtml }} 
+              />
+            ) : (
+              article.description
             )}
-            {article.aiSummary ||
-              (article.description && article.description.length > 750
-                ? article.description.substring(0, 750) + '...'
-                : article.description)}
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+        {article.blogPosts && article.blogPosts.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {article.blogPosts.map((blogPost, idx) => (
+              <a
+                key={idx}
+                href={blogPost.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded hover:border-gray-400 dark:hover:border-stone-500 transition-all group text-xs"
+                title={blogPost.title}
+              >
+                <span>📝</span>
+                <span className="text-gray-600 dark:text-stone-400 group-hover:text-gray-900 dark:group-hover:text-stone-200 truncate max-w-[450px]">{blogPost.title}</span>
+                <span className="text-gray-400 dark:text-stone-500 group-hover:text-gray-600 dark:group-hover:text-stone-300">↗</span>
+              </a>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-stone-500 mb-1">
           <span>
             {new Date(article.publishedAt).toLocaleDateString('en-US', {
               month: 'short',
@@ -218,23 +236,19 @@ export default function ArticlePage() {
               year: 'numeric',
             })}
           </span>
-          <span className="text-gray-300">·</span>
-          <span className={article.source === 'aws-blog' ? 'text-emerald-600' : 'text-lime-600'}>
-            {article.source === 'aws-blog' ? 'Blog' : 'News'}
-          </span>
           {article.author && (
             <>
-              <span className="text-gray-300">·</span>
+              <span className="text-gray-300 dark:text-stone-600">·</span>
               <span>{article.author}</span>
             </>
           )}
-          <span className="text-gray-300">·</span>
+          <span className="text-gray-300 dark:text-stone-600">·</span>
           <button
             onClick={handleStar}
             disabled={starring || !user}
             className={`${
-              isStarred ? 'text-black' : 'text-gray-300'
-            } hover:text-black disabled:opacity-50 cursor-pointer transition-colors`}
+              isStarred ? 'text-black dark:text-white' : 'text-gray-300 dark:text-stone-600'
+            } hover:text-black dark:hover:text-white disabled:opacity-50 cursor-pointer transition-colors`}
             title={
               user ? (isStarred ? 'Unstar this article' : 'Star this article') : 'Sign in to star'
             }
@@ -245,7 +259,7 @@ export default function ArticlePage() {
       </article>
 
       <div>
-        <h2 className="text-sm font-medium mb-3">Comments ({comments.length})</h2>
+        <h2 className="text-sm font-medium mb-3 text-black dark:text-white">Comments ({comments.length})</h2>
 
         <form onSubmit={handleComment} className="mb-4">
           <input
@@ -253,7 +267,7 @@ export default function ArticlePage() {
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
             placeholder="Add a comment..."
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white mb-2"
+            className="w-full px-2 py-1.5 border border-gray-300 dark:border-stone-600 rounded text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white dark:bg-stone-800 dark:text-stone-100 mb-2"
           />
           <div className="flex items-center gap-2">
             <button
@@ -269,7 +283,7 @@ export default function ArticlePage() {
         <div className="space-y-2">{comments.map(renderComment)}</div>
 
         {comments.length === 0 && (
-          <p className="text-center text-xs text-gray-500 py-6 italic">
+          <p className="text-center text-xs text-gray-500 dark:text-stone-500 py-6 italic">
             No comments yet. Be the first to comment!
           </p>
         )}
@@ -277,13 +291,13 @@ export default function ArticlePage() {
 
       {showAuthModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-200 p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-2">Sign in required</h3>
-            <p className="text-sm text-gray-600 mb-4">Please sign in to interact with articles.</p>
+          <div className="bg-white dark:bg-stone-800 border border-gray-200 dark:border-stone-700 p-6 max-w-md w-full rounded-lg">
+            <h3 className="text-lg font-semibold mb-2 text-black dark:text-white">Sign in required</h3>
+            <p className="text-sm text-gray-600 dark:text-stone-400 mb-4">Please sign in to interact with articles.</p>
             <CustomAuthenticator />
             <button
               onClick={() => setShowAuthModal(false)}
-              className="mt-4 text-sm text-gray-600 hover:text-black"
+              className="mt-4 text-sm text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white cursor-pointer"
             >
               Close
             </button>

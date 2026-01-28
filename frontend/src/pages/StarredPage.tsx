@@ -5,16 +5,16 @@ import { getStarredArticles, batchComments } from '../lib/api';
 import { Link, useNavigate } from 'react-router-dom';
 import ArticleCard from '../components/ArticleCard';
 
-export default function StarredPage() {
+interface StarredPageProps {
+  useAiSummaries: boolean;
+}
+
+export default function StarredPage({ useAiSummaries }: StarredPageProps) {
   const { user } = useAuthenticator((context) => [context.user]);
   const navigate = useNavigate();
   const [savedArticles, setSavedArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
-  const [useAiSummaries, setUseAiSummaries] = useState(() => {
-    const stored = localStorage.getItem('useAiSummaries');
-    return stored ? JSON.parse(stored) : true;
-  });
 
   useEffect(() => {
     if (user) {
@@ -61,7 +61,7 @@ export default function StarredPage() {
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-12">
-        <h1 className="text-lg font-semibold mb-4 text-center">Sign in to view starred articles</h1>
+        <h1 className="text-lg font-semibold mb-4 text-center text-black dark:text-white">Sign in to view starred articles</h1>
         <CustomAuthenticator />
       </div>
     );
@@ -70,38 +70,21 @@ export default function StarredPage() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-black"></div>
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 dark:border-stone-600 border-t-black dark:border-t-white"></div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-4 pb-3 border-b border-gray-200">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-lg font-semibold">Starred Articles ({savedArticles.length})</h1>
-          <label className="flex items-center gap-2 cursor-pointer text-xs">
-            <input
-              type="checkbox"
-              checked={useAiSummaries}
-              onChange={(e) => {
-                const newValue = e.target.checked;
-                setUseAiSummaries(newValue);
-                localStorage.setItem('useAiSummaries', JSON.stringify(newValue));
-              }}
-              className="w-3.5 h-3.5 cursor-pointer"
-            />
-            <span className="font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
-              AI
-            </span>
-          </label>
-        </div>
+      <div className="mb-4 pb-3 border-b border-gray-200 dark:border-stone-800">
+        <h1 className="text-lg font-semibold text-black dark:text-white">Starred Articles ({savedArticles.length})</h1>
       </div>
 
       {savedArticles.length === 0 ? (
-        <div className="text-center py-12 text-sm text-gray-500">
+        <div className="text-center py-12 text-sm text-gray-500 dark:text-stone-500">
           <p className="mb-2">You haven't starred any articles yet.</p>
-          <Link to="/" className="hover:text-black hover:underline">
+          <Link to="/" className="hover:text-black dark:hover:text-white hover:underline">
             Browse articles →
           </Link>
         </div>

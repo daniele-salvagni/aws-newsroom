@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 * {
   box-sizing: border-box;
 }
@@ -16,6 +18,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: #ffffff;
   color: #0a0a0a;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dark body {
+  background: #1c1917; /* stone-900 */
+  color: #fafaf9; /* stone-50 */
 }
 
 ::selection {
@@ -26,6 +34,16 @@ body {
 ::-moz-selection {
   background: #f3e8ff; /* violet-100 */
   color: #0a0a0a;
+}
+
+.dark ::selection {
+  background: #7c3aed; /* violet-600 */
+  color: #ffffff;
+}
+
+.dark ::-moz-selection {
+  background: #7c3aed;
+  color: #ffffff;
 }
 
 code {

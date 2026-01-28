@@ -13,7 +13,11 @@ import ArticleCard from '../components/ArticleCard';
 
 // todo: refactor this thing
 
-export default function HomePage() {
+interface HomePageProps {
+  useAiSummaries: boolean;
+}
+
+export default function HomePage({ useAiSummaries }: HomePageProps) {
   const { user } = useAuthenticator((context) => [context.user]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -22,9 +26,7 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState({
-    source: 'aws-news',
     hashtag: '',
-    // excludeRegional: false, // Temporarily disabled
   });
   const [lastReadTimestamp, setLastReadTimestamp] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
@@ -39,15 +41,10 @@ export default function HomePage() {
     endTime: string;
   } | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [useAiSummaries, setUseAiSummaries] = useState(() => {
-    const stored = localStorage.getItem('useAiSummaries');
-    return stored ? JSON.parse(stored) : true;
-  });
 
   // Initialize and sync filters from URL params
   useEffect(() => {
     setFilters({
-      source: searchParams.get('source') || 'aws-news',
       hashtag: searchParams.get('hashtag') || '',
     });
     if (!isInitialized) {
@@ -78,13 +75,11 @@ export default function HomePage() {
   useEffect(() => {
     if (!isInitialized) return; // Don't sync until initialized
 
-    const currentSource = searchParams.get('source') || '';
     const currentHashtag = searchParams.get('hashtag') || '';
 
     // Only update URL if filters actually changed
-    if (filters.source !== currentSource || filters.hashtag !== currentHashtag) {
+    if (filters.hashtag !== currentHashtag) {
       const params = new URLSearchParams();
-      if (filters.source) params.set('source', filters.source);
       if (filters.hashtag) params.set('hashtag', filters.hashtag);
       setSearchParams(params);
     }
@@ -121,9 +116,7 @@ export default function HomePage() {
       const data = await listArticles({
         page,
         limit: 100,
-        source: filters.source || undefined,
         hashtag: filters.hashtag || undefined,
-        // excludeRegional: filters.excludeRegional, // Temporarily disabled
       });
 
       let articlesWithComments = data.articles;
@@ -194,7 +187,7 @@ export default function HomePage() {
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-12">
-        <h1 className="text-lg font-semibold mb-4 text-center">Sign in to view AWS Newsroom</h1>
+        <h1 className="text-lg font-semibold mb-4 text-center text-black dark:text-white">Sign in to view AWS Newsroom</h1>
         <CustomAuthenticator />
       </div>
     );
@@ -202,12 +195,12 @@ export default function HomePage() {
 
   return (
     <div>
-      <div className="mb-4 pb-3 border-b border-gray-200">
+      <div className="mb-4 pb-3 border-b border-gray-200 dark:border-stone-800">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-lg font-semibold">
+          <h1 className="text-lg font-semibold flex items-center gap-3 text-black dark:text-white">
             Latest AWS News
             {filters.hashtag && (
-              <span className="ml-2 text-sm font-normal text-violet-600">
+              <span className="text-sm font-normal text-violet-600 dark:text-violet-400">
                 #{filters.hashtag}
                 <a
                   href="#"
@@ -215,71 +208,32 @@ export default function HomePage() {
                     e.preventDefault();
                     handleFilterChange({ hashtag: '' });
                   }}
-                  className="ml-2 text-gray-400 hover:text-black"
+                  className="ml-2 text-gray-400 hover:text-black dark:hover:text-white"
                 >
                   ×
                 </a>
               </span>
             )}
           </h1>
-          <div className="flex items-center gap-3 text-sm">
-            {/* <button
-              onClick={() => {
-                // Use the most recent article's published date, not current date
-                // This prevents marking articles as read that haven't been ingested yet
-                if (articles.length > 0) {
-                  const mostRecentDate = articles[0].publishedAt;
-                  localStorage.setItem('lastReadTimestamp', mostRecentDate);
-                  setLastReadTimestamp(mostRecentDate);
-                }
-              }}
-              className="text-xs text-gray-600 hover:text-black underline cursor-pointer"
+          {import.meta.env.VITE_BRANDING_LOGO_URL && (
+            <a 
+              href={import.meta.env.VITE_BRANDING_LOGO_LINK || '#'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:opacity-70 transition-opacity"
             >
-              mark all as read
-            </button> */}
-            <label className="flex items-center gap-2 cursor-pointer text-xs">
-              <input
-                type="checkbox"
-                checked={useAiSummaries}
-                onChange={(e) => {
-                  const newValue = e.target.checked;
-                  setUseAiSummaries(newValue);
-                  localStorage.setItem('useAiSummaries', JSON.stringify(newValue));
-                }}
-                className="w-3.5 h-3.5 cursor-pointer"
+              <img 
+                src={import.meta.env.VITE_BRANDING_LOGO_URL} 
+                alt="Branding" 
+                className="h-5 dark:brightness-0 dark:invert"
               />
-              <span className="font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
-                AI
-              </span>
-            </label>
-
-            <select
-              value={filters.source}
-              onChange={(e) => handleFilterChange({ source: e.target.value })}
-              className="px-2 py-1 border border-gray-300 text-sm focus:outline-none focus:border-black"
-            >
-              <option value="">All Sources</option>
-              <option value="aws-news">AWS News</option>
-              <option value="aws-blog">AWS Blog</option>
-            </select>
-
-            {/* Temporarily disabled - regional filtering removed from backend
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filters.excludeRegional}
-                onChange={(e) => handleFilterChange({ excludeRegional: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-gray-600">Hide Regional</span>
-            </label>
-            */}
-          </div>
+            </a>
+          )}
         </div>
       </div>
 
       {error && (
-        <div className="bg-gray-50 border border-gray-200 text-sm px-3 py-2 mb-6">{error}</div>
+        <div className="bg-gray-50 dark:bg-stone-800 border border-gray-200 dark:border-stone-700 text-sm px-3 py-2 mb-6 text-gray-700 dark:text-stone-300">{error}</div>
       )}
 
       {/* Up Next - show on unfiltered view or when filtering by source only */}
@@ -315,22 +269,22 @@ export default function HomePage() {
           });
 
           return (
-            <div className="mb-4 bg-gradient-to-r from-fuchsia-50 to-violet-50 px-3 py-2 rounded border-l-2 border-fuchsia-400">
+            <div className="mb-4 bg-linear-to-r from-fuchsia-50 to-violet-50 dark:from-fuchsia-950/30 dark:to-violet-950/30 px-3 py-2 rounded border-l-2 border-fuchsia-400 dark:border-fuchsia-500">
               <div className="flex items-baseline gap-2 text-xs">
-                <span className="text-fuchsia-600 font-medium">{upcomingEvent.category}</span>
-                <span className="text-gray-400">·</span>
+                <span className="text-fuchsia-600 dark:text-fuchsia-400 font-medium">{upcomingEvent.category}</span>
+                <span className="text-gray-400 dark:text-stone-600">·</span>
                 <span
-                  className="text-gray-700 font-medium"
+                  className="text-gray-700 dark:text-stone-300 font-medium"
                   title={`${formattedDate} ${formattedTime}`}
                 >
                   {timeRemaining}
                 </span>
-                <span className="text-gray-400">·</span>
+                <span className="text-gray-400 dark:text-stone-600">·</span>
                 <a
                   href={upcomingEvent.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-violet-700 hover:text-black hover:underline"
+                  className="text-violet-700 dark:text-violet-400 hover:text-black dark:hover:text-white hover:underline"
                 >
                   {upcomingEvent.title}
                 </a>
@@ -340,7 +294,7 @@ export default function HomePage() {
         })()}
 
       {popularHashtags.length > 0 ? (
-        <div className="mb-6 text-xs text-gray-500">
+        <div className="mb-6 text-xs text-gray-500 dark:text-stone-500">
           <span className="mr-2">Popular:</span>
           {popularHashtags.map(({ hashtag, articleCount }, idx) => (
             <span key={hashtag}>
@@ -352,18 +306,18 @@ export default function HomePage() {
                 }}
                 className={`transition-colors ${
                   filters.hashtag === hashtag
-                    ? 'text-violet-600 font-medium'
-                    : 'text-gray-600 hover:text-black hover:underline'
+                    ? 'text-violet-600 dark:text-violet-400 font-medium'
+                    : 'text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white hover:underline'
                 }`}
               >
-                #{hashtag} <span className="text-gray-400">({articleCount})</span>
+                #{hashtag} <span className="text-gray-400 dark:text-stone-600">({articleCount})</span>
               </a>
               {idx < popularHashtags.length - 1 && <span className="mx-1.5">·</span>}
             </span>
           ))}
         </div>
       ) : (
-        <div className="mb-4 text-xs text-gray-500">
+        <div className="mb-4 text-xs text-gray-500 dark:text-stone-500">
           <span className="mr-2">Popular:</span>
           <span className="italic">
             No tags yet. Add #hashtags in your comments to organize articles!
@@ -385,7 +339,7 @@ export default function HomePage() {
           return (
             <div key={article.articleId}>
               {showReinventDivider && (
-                <div className="py-2 text-xs text-fuchsia-600 text-center border-dashed border-t border-fuchsia-400">
+                <div className="py-2 text-xs text-fuchsia-600 dark:text-fuchsia-400 text-center border-dashed border-t border-fuchsia-400 dark:border-fuchsia-600">
                   ↑ pre-re:Invent 2025
                 </div>
               )}
@@ -428,21 +382,21 @@ export default function HomePage() {
 
       {loading && (
         <div className="text-center py-8">
-          <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-black"></div>
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 dark:border-stone-600 border-t-black dark:border-t-white"></div>
         </div>
       )}
 
       {!loading && articles.length === 0 && (
-        <div className="text-center py-12 text-sm text-gray-500">
+        <div className="text-center py-12 text-sm text-gray-500 dark:text-stone-500">
           No articles found. Try adjusting your filters.
         </div>
       )}
 
       {!loading && hasMore && (
-        <div className="text-center mt-6 pt-4 border-t border-gray-100">
+        <div className="text-center mt-6 pt-4 border-t border-gray-100 dark:border-stone-800">
           <button
             onClick={() => setPage((p) => p + 1)}
-            className="text-sm text-gray-600 hover:text-black underline"
+            className="text-sm text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white underline cursor-pointer"
           >
             Load More
           </button>

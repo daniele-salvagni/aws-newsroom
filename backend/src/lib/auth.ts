@@ -6,6 +6,7 @@ export interface UserContext {
   username: string;
 }
 
+/** Extract user context from Cognito claims in API Gateway event */
 export function getUserFromEvent(event: APIGatewayProxyEvent): UserContext | null {
   const claims = event.requestContext?.authorizer?.claims;
 
@@ -20,6 +21,7 @@ export function getUserFromEvent(event: APIGatewayProxyEvent): UserContext | nul
   };
 }
 
+/** Extract user context from event, throwing if not authenticated */
 export function requireUser(event: APIGatewayProxyEvent): UserContext {
   const user = getUserFromEvent(event);
   if (!user) {

@@ -1,6 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { query } from '../../lib/db.js';
 import { success, error } from '../../lib/response.js';
+import { createLogger } from '../../lib/logger.js';
+
+const logger = createLogger('events-upcoming');
 
 interface EventQueryResult {
   event_id: string;
@@ -11,20 +14,13 @@ interface EventQueryResult {
   end_time: string;
 }
 
+/** Get the next upcoming event within 14 days */
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
-    // Get the next upcoming event within 14 days
     const events = await query<EventQueryResult>(`
-      SELECT
-        event_id,
-        title,
-        url,
-        category,
-        start_time,
-        end_time
+      SELECT event_id, title, url, category, start_time, end_time
       FROM events
-      WHERE start_time > NOW()
-        AND start_time <= NOW() + INTERVAL '14 days'
+      WHERE start_time > NOW() AND start_time <= NOW() + INTERVAL '14 days'
       ORDER BY start_time ASC
       LIMIT 1
     `);
@@ -45,7 +41,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       },
     });
   } catch (err) {
-    console.error('Error fetching upcoming event:', err);
+    logger.error('Failed to fetch upcoming event', { error: err });
     return error('Failed to fetch upcoming event');
   }
 }

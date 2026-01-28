@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
     title VARCHAR(500) NOT NULL,
     url VARCHAR(1000) NOT NULL UNIQUE,
     description TEXT,
+    raw_html TEXT,
     blog_category VARCHAR(100),
     ai_summary TEXT,
     summary_generated_at TIMESTAMP,
@@ -92,3 +93,17 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX ASYNC IF NOT EXISTS idx_events_start_time ON events(start_time);
 CREATE INDEX ASYNC IF NOT EXISTS idx_events_category ON events(category);
+
+-- Article links table (external links extracted from announcements)
+CREATE TABLE IF NOT EXISTS article_links (
+    link_id VARCHAR(64) PRIMARY KEY,
+    article_id VARCHAR(64) NOT NULL,
+    url VARCHAR(1000) NOT NULL,
+    title VARCHAR(500),
+    domain VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX ASYNC IF NOT EXISTS idx_article_links_article ON article_links(article_id);
+CREATE INDEX ASYNC IF NOT EXISTS idx_article_links_domain ON article_links(domain);
+CREATE UNIQUE INDEX ASYNC IF NOT EXISTS idx_article_links_unique ON article_links(article_id, url);

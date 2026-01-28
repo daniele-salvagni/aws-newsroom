@@ -1,11 +1,13 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { query } from '../../lib/db.js';
 import { getSummaryPrompt } from '../../prompts/summary-prompt.js';
+import { createLogger } from '../../lib/logger.js';
 
+const logger = createLogger('generate-summaries');
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 
 interface SummaryInput {
-  batchSize?: number; // Number of articles to process in this invocation
+  batchSize?: number;
 }
 
 interface ArticleQueryResult {
@@ -15,13 +17,13 @@ interface ArticleQueryResult {
   source: string;
 }
 
+/** Generate AI summaries for articles that don't have one */
 export const handler = async (event: SummaryInput = {}) => {
-  console.log('Starting AI summary generation', event);
+  logger.info('Starting AI summary generation', { event });
 
   const batchSize = event.batchSize || 100;
 
   try {
-    // Find articles without AI summaries which have a description (aws-news)
     const articles = await query<ArticleQueryResult>(
       `SELECT article_id, title, description, source
        FROM news_articles
@@ -33,20 +35,16 @@ export const handler = async (event: SummaryInput = {}) => {
        LIMIT $1`,
       [batchSize]
     );
-    console.log(`Found ${articles.length} articles needing summaries`);
+
+    logger.info('Articles found needing summaries', { count: articles.length });
 
     if (articles.length === 0) {
-      return {
-        statusCode: 200,
-        message: 'No articles need summaries',
-        processed: 0,
-      };
+      return { statusCode: 200, message: 'No articles need summaries', processed: 0 };
     }
 
     let successCount = 0;
     let errorCount = 0;
 
-    // Process each article individually
     for (const article of articles) {
       try {
         const summary = await generateSummary(article.title, article.description);
@@ -59,12 +57,14 @@ export const handler = async (event: SummaryInput = {}) => {
         );
 
         successCount++;
-        console.log(`Generated summary for article ${article.article_id}`);
+        logger.debug('Summary generated', { articleId: article.article_id });
       } catch (error) {
-        console.error(`Error generating summary for ${article.article_id}:`, error);
+        logger.error('Failed to generate summary', { articleId: article.article_id, error });
         errorCount++;
       }
     }
+
+    logger.info('Summary generation completed', { successCount, errorCount });
 
     return {
       statusCode: 200,
@@ -73,50 +73,35 @@ export const handler = async (event: SummaryInput = {}) => {
       remaining: articles.length - successCount,
     };
   } catch (error) {
-    console.error('Error in summary generation:', error);
+    logger.error('Summary generation failed', { error });
     throw error;
   }
 };
 
+/** Generate a summary using Amazon Bedrock */
 async function generateSummary(title: string, content: string): Promise<string> {
-  // Limit to ~1000 tokens (~4000 characters)
   const MAX_CHARS = 4000;
   const truncatedContent =
     content.length > MAX_CHARS ? content.substring(0, MAX_CHARS) + '...' : content;
 
   const prompt = getSummaryPrompt(title, truncatedContent);
 
-  const payload = {
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            text: prompt,
-          },
-        ],
-      },
-    ],
-    inferenceConfig: {
-      maxTokens: 150,
-      temperature: 0.3,
-    },
-  };
-
   const command = new InvokeModelCommand({
     modelId: 'amazon.nova-lite-v1:0',
     contentType: 'application/json',
     accept: 'application/json',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: [{ text: prompt }] }],
+      inferenceConfig: { maxTokens: 150, temperature: 0.3 },
+    }),
   });
 
   const response = await bedrockClient.send(command);
   const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-
   const summary = responseBody.output?.message?.content?.[0]?.text || '';
 
   if (!summary) {
-    console.error('No summary in response:', JSON.stringify(responseBody));
+    logger.error('Empty summary received', { responseBody });
     throw new Error('Empty summary received from Bedrock');
   }
 

@@ -127,13 +127,10 @@ export default function ArticleCard({
     });
   };
 
-  const isBlog = article.source === 'aws-blog';
-  const sourceLabel = isBlog ? 'Blog' : 'News';
-
   return (
     <div
-      className={`py-3 border-b border-gray-100 hover:bg-gray-50 transition-all duration-200 relative pl-3 ${
-        isUnread ? 'border-l-2 border-dashed border-l-fuchsia-300' : ''
+      className={`py-3 border-b border-gray-100 dark:border-stone-800 hover:bg-gray-50 dark:hover:bg-stone-800/50 transition-all duration-200 relative pl-3 ${
+        isUnread ? 'border-l-2 border-dashed border-l-fuchsia-300 dark:border-l-fuchsia-500' : ''
       }`}
     >
       {isFirstUnread && onMarkAsRead && (
@@ -143,7 +140,7 @@ export default function ArticleCard({
             e.preventDefault();
             onMarkAsRead();
           }}
-          className="absolute -left-5 top-0 text-xs text-fuchsia-500 hover:text-gray-800 uppercase tracking-wider cursor-pointer whitespace-nowrap"
+          className="absolute -left-5 top-0 text-xs text-fuchsia-500 dark:text-fuchsia-400 hover:text-gray-800 dark:hover:text-stone-200 uppercase tracking-wider cursor-pointer whitespace-nowrap"
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           title="Mark all as read"
         >
@@ -151,20 +148,20 @@ export default function ArticleCard({
         </a>
       )}
       <div className="flex items-start gap-3">
-        <div className="flex flex-col items-center flex-shrink-0 w-5">
+        <div className="flex flex-col items-center shrink-0 w-5">
           <button
             onClick={handleStar}
             disabled={starring || !user}
             className={`${
-              isStarred ? 'text-black' : 'text-gray-300'
-            } hover:text-black disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors text-sm`}
+              isStarred ? 'text-black dark:text-white' : 'text-gray-300 dark:text-stone-600'
+            } hover:text-black dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors text-sm`}
             title={
               user ? (isStarred ? 'Unstar this article' : 'Star this article') : 'Sign in to star'
             }
           >
             ★
           </button>
-          {localStarCount > 0 && <span className="text-xs text-gray-500">{localStarCount}</span>}
+          {localStarCount > 0 && <span className="text-xs text-gray-500 dark:text-stone-500">{localStarCount}</span>}
         </div>
         <div className="flex-1 min-w-0">
           <div
@@ -174,42 +171,45 @@ export default function ArticleCard({
               onTogglePreview();
             }}
           >
-            <h2 className="text-sm font-medium text-black line-clamp-2 mb-2 flex-1">
+            <h2 className="text-sm font-medium text-black dark:text-stone-100 line-clamp-2 mb-2 flex-1">
               {article.title}
             </h2>
           </div>
 
-          {showPreview && (article.aiSummary || article.description) && (
+          {showPreview && (article.aiSummary || article.rawHtml || article.description) && (
             <div
-              className="text-sm text-gray-600 mb-3 leading-relaxed cursor-auto"
+              className="text-sm text-gray-600 dark:text-stone-400 mb-3 leading-relaxed cursor-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {useAiSummary && article.aiSummary && (
-                <span className="mr-1.5 text-xs font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
+                <span className="mr-1.5 text-xs font-semibold bg-linear-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent uppercase tracking-wide">
                   AI Summary:
                 </span>
               )}
               {useAiSummary && article.aiSummary ? (
                 <StreamingText text={article.aiSummary} speed={10} />
+              ) : article.rawHtml ? (
+                <div 
+                  className="[&_a]:text-violet-600 dark:[&_a]:text-violet-400 [&_a]:underline [&_a:hover]:text-violet-800 dark:[&_a:hover]:text-violet-300"
+                  dangerouslySetInnerHTML={{ __html: article.rawHtml }} 
+                />
               ) : (
                 article.description
               )}
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-stone-500 mb-1">
             <span>{formatDate(article.publishedAt)}</span>
-            <span className="text-gray-300">·</span>
-            <span className={isBlog ? 'text-emerald-600' : 'text-lime-600'}>{sourceLabel}</span>
-            <span className="text-gray-300">·</span>
+            <span className="text-gray-300 dark:text-stone-600">·</span>
             <Link
               to={`/article/${article.articleId}`}
-              className="hover:text-black"
+              className="hover:text-black dark:hover:text-white"
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
               Details
             </Link>
-            <span className="text-gray-300">·</span>
+            <span className="text-gray-300 dark:text-stone-600">·</span>
             <a
               href={
                 article.url.startsWith('http')
@@ -218,12 +218,12 @@ export default function ArticleCard({
               }
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-black"
+              className="hover:text-black dark:hover:text-white"
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              Read ↗
+              Read↗
             </a>
-            <span className="text-gray-300">·</span>
+            <span className="text-gray-300 dark:text-stone-600">·</span>
             <a
               href="#"
               onClick={(e) => {
@@ -235,11 +235,31 @@ export default function ArticleCard({
                 }
                 setShowCommentBox(!showCommentBox);
               }}
-              className="hover:text-black"
+              className="hover:text-black dark:hover:text-white"
             >
               Comment
             </a>
           </div>
+
+          {article.blogPosts && article.blogPosts.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {article.blogPosts.map((blogPost, idx) => (
+                <a
+                  key={idx}
+                  href={blogPost.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded hover:border-gray-400 dark:hover:border-stone-500 transition-all group text-xs"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  title={blogPost.title}
+                >
+                  <span>📝</span>
+                  <span className="text-gray-600 dark:text-stone-400 group-hover:text-gray-900 dark:group-hover:text-stone-200 truncate max-w-[450px]">{blogPost.title}</span>
+                  <span className="text-gray-400 dark:text-stone-500 group-hover:text-gray-600 dark:group-hover:text-stone-300">↗</span>
+                </a>
+              ))}
+            </div>
+          )}
 
           {showCommentBox && (
             <form
@@ -252,7 +272,7 @@ export default function ArticleCard({
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Add a comment..."
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white mb-2"
+                className="w-full px-2 py-1.5 border border-gray-300 dark:border-stone-600 rounded text-xs focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white dark:bg-stone-800 dark:text-stone-100 mb-2"
                 autoFocus
               />
               <div className="flex items-center gap-2">
@@ -270,7 +290,7 @@ export default function ArticleCard({
                     setShowCommentBox(false);
                     setCommentText('');
                   }}
-                  className="text-xs px-2 py-1 text-gray-600 hover:text-black cursor-pointer"
+                  className="text-xs px-2 py-1 text-gray-600 dark:text-stone-400 hover:text-black dark:hover:text-white cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -300,10 +320,10 @@ export default function ArticleCard({
           )} */}
 
       {localComments.length > 0 && (
-        <div className="ml-[9px] pl-5 border-l-1 text-violet-600 mt-2 space-y-1">
+        <div className="ml-[9px] pl-5 border-l border-violet-600 dark:border-violet-500 mt-2 space-y-1">
           {localComments.map((comment) => (
-            <div key={comment.commentId} className="text-sm text-gray-600 group hover:bg-gray-50">
-              <span className="font-medium text-gray-900">{comment.displayName}:</span>{' '}
+            <div key={comment.commentId} className="text-sm text-gray-600 dark:text-stone-400 group hover:bg-gray-50 dark:hover:bg-stone-800/50">
+              <span className="font-medium text-gray-900 dark:text-stone-200">{comment.displayName}:</span>{' '}
               {onHashtagClick ? (
                 <HashtagText text={comment.content} onHashtagClick={onHashtagClick} />
               ) : (
@@ -317,7 +337,7 @@ export default function ArticleCard({
                     e.stopPropagation();
                     handleDeleteComment(comment.commentId);
                   }}
-                  className="ml-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  className="ml-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   title="Delete comment"
                 >
                   ×
