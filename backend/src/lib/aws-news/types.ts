@@ -18,7 +18,7 @@ export interface NewsItem {
       regionalAvailability?: string;
     };
   };
-  tags: Tag[];
+  tags?: Tag[];
 }
 
 export interface Tag {
@@ -46,22 +46,4 @@ export interface FetchOptions {
 export interface FetchResult {
   items: NewsItem[];
   totalHits: number;
-  diagnostics: FetchDiagnostics;
-}
-
-export interface FetchDiagnostics {
-  year: number;
-  tagFormatsUsed: string[];
-  tagFormatResults: Record<string, number>;
-  itemsWithMismatchedYearTag: MismatchedItem[];
-  duplicatesRemoved: number;
-  totalItemsFetched: number;
-}
-
-export interface MismatchedItem {
-  id: string;
-  headline: string;
-  postDateTime: string;
-  actualYear: number;
-  taggedYears: number[];
 }

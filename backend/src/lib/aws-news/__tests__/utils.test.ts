@@ -3,13 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  deduplicateItems,
-  sortByDateDesc,
-  getItemDate,
-  getItemYear,
-  extractYearTags,
-} from '../utils.js';
+import { deduplicateItems, sortByDateDesc, getItemDate, getItemYear } from '../utils.js';
 import {
   createNewsItem,
   standard2025Item,
@@ -79,39 +73,5 @@ describe('getItemYear', () => {
   it('extracts year from item date', () => {
     expect(getItemYear(standard2025Item)).toBe(2025);
     expect(getItemYear(item2026)).toBe(2026);
-  });
-});
-
-// This section is for diagnostics
-describe('extractYearTags', () => {
-  it('extracts year from standard tag format', () => {
-    const tags = [{ id: 'whats-new-v2#year#2025', name: '2025' }];
-    expect(extractYearTags(tags)).toEqual([2025]);
-  });
-
-  it('extracts year from GLOBAL tag format', () => {
-    const tags = [{ id: 'GLOBAL#local-tags-whats-new-v2-year#2025', name: '2025' }];
-    expect(extractYearTags(tags)).toEqual([2025]);
-  });
-
-  it('extracts multiple years', () => {
-    const tags = [
-      { id: 'whats-new-v2#year#2025', name: '2025' },
-      { id: 'whats-new-v2#year#2026', name: '2026' },
-    ];
-    expect(extractYearTags(tags)).toEqual([2025, 2026]);
-  });
-
-  it('ignores non-year tags', () => {
-    const tags = [
-      { id: 'whats-new-v2#general-products#amazon-ec2', name: 'amazon-ec2' },
-      { id: 'whats-new-v2#year#2025', name: '2025' },
-    ];
-    expect(extractYearTags(tags)).toEqual([2025]);
-  });
-
-  it('returns empty array when no year tags', () => {
-    const tags = [{ id: 'whats-new-v2#general-products#amazon-s3', name: 's3' }];
-    expect(extractYearTags(tags)).toEqual([]);
   });
 });

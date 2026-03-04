@@ -2,7 +2,7 @@
  * AWS News Client Utilities
  */
 
-import type { NewsItem, Tag } from './types.js';
+import type { NewsItem } from './types.js';
 
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 1000;
@@ -52,17 +52,4 @@ export function getItemDate(item: NewsItem): Date {
 
 export function getItemYear(item: NewsItem): number {
   return getItemDate(item).getFullYear();
-}
-
-export function extractYearTags(tags: Tag[]): number[] {
-  const years: number[] = [];
-
-  for (const tag of tags) {
-    const match = tag.id.match(/year#(\d{4})$/);
-    if (match) {
-      years.push(parseInt(match[1], 10));
-    }
-  }
-
-  return years;
 }

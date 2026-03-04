@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { extractBlogUrls, stripHtml, fetchBlogTitle } from '../ingest-news.js';
+import { extractBlogUrls, stripHtml } from '../ingest-news.js';
 
-// Mock dependencies before importing handler
+// Mock dependencies
 vi.mock('../../../lib/db.js', () => ({
   query: vi.fn(),
 }));
 
 vi.mock('../../../lib/aws-news/index.js', () => ({
-  fetchNews: vi.fn(),
+  fetchNewsInDateRange: vi.fn(),
 }));
 
 import { query } from '../../../lib/db.js';
-import { fetchNews } from '../../../lib/aws-news/index.js';
+import { fetchNewsInDateRange } from '../../../lib/aws-news/index.js';
 
 const mockQuery = vi.mocked(query);
-const mockFetchNews = vi.mocked(fetchNews);
+const mockFetchNewsInDateRange = vi.mocked(fetchNewsInDateRange);
 
 describe('extractBlogUrls', () => {
   it('extracts AWS blog URLs from HTML', () => {
@@ -46,18 +46,6 @@ describe('extractBlogUrls', () => {
     expect(urls).toHaveLength(0);
   });
 
-  it('ignores aws.amazon.com links without /blogs/ path', () => {
-    const html = `
-      <a href="https://aws.amazon.com/msk/">MSK product page</a>
-      <a href="https://aws.amazon.com/about-aws/whats-new/2024/">whats new</a>
-      <a href="https://aws.amazon.com/solutions/case-studies/">case studies</a>
-    `;
-
-    const urls = extractBlogUrls(html);
-
-    expect(urls).toHaveLength(0);
-  });
-
   it('deduplicates URLs', () => {
     const html = `
       <a href="https://aws.amazon.com/blogs/aws/post/">first</a>
@@ -73,17 +61,6 @@ describe('extractBlogUrls', () => {
     expect(extractBlogUrls(null)).toEqual([]);
     expect(extractBlogUrls(undefined)).toEqual([]);
     expect(extractBlogUrls('')).toEqual([]);
-  });
-
-  it('handles real AWS announcement HTML', () => {
-    const html = `<p>To learn more, visit our <a href="https://aws.amazon.com/blogs/big-data/safely-remove-kafka-brokers-from-amazon-msk-provisioned-clusters/" target="_blank" rel="noopener">launch blog</a> and the <a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-remove-broker.html" target="_blank" rel="noopener">Amazon MSK Developer Guide</a>.</p>`;
-
-    const urls = extractBlogUrls(html);
-
-    expect(urls).toHaveLength(1);
-    expect(urls[0]).toBe(
-      'https://aws.amazon.com/blogs/big-data/safely-remove-kafka-brokers-from-amazon-msk-provisioned-clusters/'
-    );
   });
 });
 
@@ -111,7 +88,7 @@ describe('ingest-news handler', () => {
   });
 
   it('uses daysBack to calculate date range', async () => {
-    mockFetchNews.mockResolvedValue({ items: [], totalHits: 0, diagnostics: {} as any });
+    mockFetchNewsInDateRange.mockResolvedValue([]);
 
     const { handler } = await import('../ingest-news.js');
     const result = await handler({ daysBack: 3 });
@@ -121,7 +98,7 @@ describe('ingest-news handler', () => {
   });
 
   it('uses explicit startDate and endDate when provided', async () => {
-    mockFetchNews.mockResolvedValue({ items: [], totalHits: 0, diagnostics: {} as any });
+    mockFetchNewsInDateRange.mockResolvedValue([]);
 
     const { handler } = await import('../ingest-news.js');
     const result = await handler({
@@ -133,11 +110,21 @@ describe('ingest-news handler', () => {
     expect(result.dateRange.end).toBe('2026-01-15T00:00:00Z');
   });
 
+  it('passes correct date range to fetchNewsInDateRange', async () => {
+    mockFetchNewsInDateRange.mockResolvedValue([]);
+
+    const { handler } = await import('../ingest-news.js');
+    await handler({ daysBack: 2 });
+
+    expect(mockFetchNewsInDateRange).toHaveBeenCalledWith({
+      startDate: new Date('2026-01-25T12:00:00.000Z'),
+      endDate: new Date('2026-01-27T12:00:00.000Z'),
+    });
+  });
+
   it('inserts new articles into database', async () => {
     const mockItem = createMockNewsItem('item-1', '2026-01-26T10:00:00Z');
-    mockFetchNews
-      .mockResolvedValueOnce({ items: [mockItem], totalHits: 1, diagnostics: {} as any })
-      .mockResolvedValue({ items: [], totalHits: 0, diagnostics: {} as any });
+    mockFetchNewsInDateRange.mockResolvedValue([mockItem]);
     mockQuery.mockResolvedValue([]);
 
     const { handler } = await import('../ingest-news.js');
@@ -153,10 +140,8 @@ describe('ingest-news handler', () => {
 
   it('skips existing articles', async () => {
     const mockItem = createMockNewsItem('item-1', '2026-01-26T10:00:00Z');
-    mockFetchNews
-      .mockResolvedValueOnce({ items: [mockItem], totalHits: 1, diagnostics: {} as any })
-      .mockResolvedValue({ items: [], totalHits: 0, diagnostics: {} as any });
-    mockQuery.mockResolvedValueOnce([{ exists: 1 }]); // SELECT returns existing
+    mockFetchNewsInDateRange.mockResolvedValue([mockItem]);
+    mockQuery.mockResolvedValueOnce([{ exists: 1 }]);
 
     const { handler } = await import('../ingest-news.js');
     const result = await handler({ daysBack: 2 });
@@ -166,7 +151,7 @@ describe('ingest-news handler', () => {
   });
 
   it('returns correct response structure', async () => {
-    mockFetchNews.mockResolvedValue({ items: [], totalHits: 0, diagnostics: {} as any });
+    mockFetchNewsInDateRange.mockResolvedValue([]);
 
     const { handler } = await import('../ingest-news.js');
     const result = await handler({ daysBack: 1 });

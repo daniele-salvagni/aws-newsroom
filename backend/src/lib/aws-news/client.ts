@@ -1,41 +1,17 @@
 /**
  * AWS News API Client
  *
- * Fetches What's New articles from AWS public (not documented) API.
- * Handles tag format inconsistencies defensively by trying multiple formats.
+ * Fetches What's New articles from AWS public (undocumented) API.
+ * Uses date-based pagination instead of year tags for reliability.
  */
 
-import type {
-  APIResponse,
-  FetchOptions,
-  FetchResult,
-  FetchDiagnostics,
-  MismatchedItem,
-  NewsItem,
-} from './types.js';
-import {
-  withRetry,
-  deduplicateItems,
-  sortByDateDesc,
-  getItemYear,
-  extractYearTags,
-} from './utils.js';
+import type { APIResponse, FetchOptions, FetchResult, NewsItem } from './types.js';
+import { withRetry, deduplicateItems, sortByDateDesc, getItemYear, getItemDate } from './utils.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('aws-news-client');
 const API_BASE = 'https://aws.amazon.com/api/dirs/items/search';
-const DEFAULT_PAGE_SIZE = 100;
-
-/**
- * Tag format patterns observed in the API.
- * AWS has changed these over time, so we try multiple formats defensively.
- */
-const TAG_FORMATS = {
-  standard: (year: number) => `whats-new-v2#year#${year}`,
-  global: (year: number) => `GLOBAL#local-tags-whats-new-v2-year#${year}`,
-} as const;
-
-type TagFormat = keyof typeof TAG_FORMATS;
+const DEFAULT_PAGE_SIZE = 2000; // Max reliable page size
 
 /** Fetch news articles for a given year and page */
 export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
@@ -43,41 +19,14 @@ export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
 
   logger.info('Fetching news articles', { year, page, pageSize });
 
-  const diagnostics: FetchDiagnostics = {
-    year,
-    tagFormatsUsed: [],
-    tagFormatResults: {},
-    itemsWithMismatchedYearTag: [],
-    duplicatesRemoved: 0,
-    totalItemsFetched: 0,
-  };
+  const response = await fetchPage(page, pageSize);
 
-  // Try all tag formats and merge results
-  const allItems: NewsItem[] = [];
+  // Filter to items matching the requested year
+  const yearItems = response.items.filter((item) => getItemYear(item) === year);
 
-  for (const [formatName, formatFn] of Object.entries(TAG_FORMATS)) {
-    const tagId = formatFn(year);
-    diagnostics.tagFormatsUsed.push(formatName);
-
-    try {
-      const response = await fetchWithTag(tagId, page, pageSize);
-      diagnostics.tagFormatResults[formatName] = response.items.length;
-      allItems.push(...response.items);
-      logger.debug('Tag format fetch succeeded', { formatName, itemCount: response.items.length });
-    } catch (err) {
-      diagnostics.tagFormatResults[formatName] = 0;
-      logger.warn('Tag format fetch failed', { formatName, year, error: err });
-    }
-  }
-
-  diagnostics.totalItemsFetched = allItems.length;
-
-  // Deduplicate (same item may appear in multiple tag formats)
-  const uniqueItems = deduplicateItems(allItems);
-  diagnostics.duplicatesRemoved = allItems.length - uniqueItems.length;
-
-  // Find items with mismatched year tags (for diagnostics)
-  diagnostics.itemsWithMismatchedYearTag = findMismatchedItems(uniqueItems, year);
+  // Deduplicate (shouldn't be needed, but defensive)
+  const uniqueItems = deduplicateItems(yearItems);
+  const duplicatesRemoved = yearItems.length - uniqueItems.length;
 
   // Sort by date descending
   const sortedItems = sortByDateDesc(uniqueItems);
@@ -85,22 +34,68 @@ export async function fetchNews(options: FetchOptions): Promise<FetchResult> {
   logger.info('News fetch completed', {
     year,
     page,
-    totalItems: sortedItems.length,
-    duplicatesRemoved: diagnostics.duplicatesRemoved,
-    mismatchedItems: diagnostics.itemsWithMismatchedYearTag.length,
+    totalFetched: response.items.length,
+    matchingYear: sortedItems.length,
+    duplicatesRemoved,
   });
 
   return {
     items: sortedItems,
-    totalHits: sortedItems.length,
-    diagnostics,
+    totalHits: response.metadata.totalHits,
   };
 }
 
-/** Fetch from API with a specific tag ID */
-async function fetchWithTag(tagId: string, page: number, pageSize: number): Promise<APIResponse> {
+export interface DateRangeOptions {
+  startDate: Date;
+  endDate: Date;
+  pageSize?: number;
+}
+
+/** Fetch all news articles within a date range */
+export async function fetchNewsInDateRange(options: DateRangeOptions): Promise<NewsItem[]> {
+  const { startDate, endDate, pageSize = DEFAULT_PAGE_SIZE } = options;
+
+  logger.info('Fetching news in date range', {
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    pageSize,
+  });
+
+  const articles: NewsItem[] = [];
+
+  for (let page = 1; ; page++) {
+    const response = await fetchPage(page, pageSize);
+    if (response.items.length === 0) break;
+
+    let foundOlderThanStart = false;
+
+    for (const item of response.items) {
+      const publishedAt = getItemDate(item);
+
+      // Skip articles newer than end date
+      if (publishedAt > endDate) continue;
+
+      // Stop collecting if we've gone past the start date
+      if (publishedAt < startDate) {
+        foundOlderThanStart = true;
+        continue;
+      }
+
+      articles.push(item);
+    }
+
+    // If we found items older than start, no need to fetch more pages
+    if (foundOlderThanStart) break;
+  }
+
+  logger.info('Date range fetch completed', { count: articles.length });
+  return articles;
+}
+
+/** Fetch a page of articles without any tag filter */
+async function fetchPage(page: number, pageSize: number): Promise<APIResponse> {
   return withRetry(async () => {
-    const url = buildUrl(tagId, page, pageSize);
+    const url = buildUrl(page, pageSize);
     logger.debug('Fetching from API', { url });
     const response = await fetch(url);
 
@@ -113,40 +108,14 @@ async function fetchWithTag(tagId: string, page: number, pageSize: number): Prom
   });
 }
 
-/** Build AWS News API URL with query parameters */
-function buildUrl(tagId: string, page: number, pageSize: number): string {
+/** Build AWS News API URL */
+function buildUrl(page: number, pageSize: number): string {
   const url = new URL(API_BASE);
   url.searchParams.set('item.directoryId', 'whats-new-v2');
   url.searchParams.set('sort_by', 'item.additionalFields.postDateTime');
   url.searchParams.set('sort_order', 'desc');
   url.searchParams.set('item.locale', 'en_US');
   url.searchParams.set('size', pageSize.toString());
-  url.searchParams.set('page', (page - 1).toString());
-  url.searchParams.set('tags.id', tagId);
+  url.searchParams.set('page', (page - 1).toString()); // API is 0-indexed
   return url.toString();
 }
-
-/** Find items where the actual year doesn't match the queried year */
-function findMismatchedItems(items: NewsItem[], expectedYear: number): MismatchedItem[] {
-  const mismatched: MismatchedItem[] = [];
-
-  for (const item of items) {
-    const actualYear = getItemYear(item);
-    const taggedYears = extractYearTags(item.tags);
-
-    // Item's actual date year doesn't match the year we queried for
-    if (actualYear !== expectedYear) {
-      mismatched.push({
-        id: item.item.id,
-        headline: item.item.additionalFields.headline ?? '',
-        postDateTime: item.item.additionalFields.postDateTime ?? '',
-        actualYear,
-        taggedYears,
-      });
-    }
-  }
-
-  return mismatched;
-}
-
-export { TAG_FORMATS };
